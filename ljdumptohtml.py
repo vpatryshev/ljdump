@@ -26,7 +26,7 @@
 # Copyright (c) 2024 Garrett Birkel and contributors
 
 
-import sys, os, codecs, pprint, argparse, shutil, xml.dom.minidom
+import os, codecs, pprint, argparse, shutil, xml.dom.minidom
 from getpass import getpass
 import urllib
 import html

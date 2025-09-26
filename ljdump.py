@@ -31,8 +31,6 @@ from getpass import getpass
 import urllib
 from xml.sax import saxutils
 from datetime import *
-import sqlite3
-from sqlite3 import Error
 from ljdumpsqlite import *
 from ljdumptohtml import ljdumptohtml
 

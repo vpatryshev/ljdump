@@ -3,7 +3,7 @@
 #
 # ljdump.py - livejournal archiver
 # Greg Hewgill, Garrett Birkel, et al
-# Version 1.7.9
+# Version 1.8
 #
 # LICENSE
 #
@@ -380,14 +380,14 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
         'getpickwurls': 1,
     }))
 
-    userpics = dict(zip(map(str, r['pickws']), r['pickwurls']))
+    userpics = dict(zip(map(possible_unicode_or_none, r['pickws']), r['pickwurls']))
     if r['defaultpicurl']:
         userpics['*'] = r['defaultpicurl']
 
     insert_or_update_user_info(cur, verbose,
         {   'journal_short_name': journal_short_name,
-            'defaultpicurl': r['defaultpicurl'],
-            'fullname': r['fullname'],
+            'defaultpicurl': possible_unicode_or_none(r['defaultpicurl']),
+            'fullname': possible_unicode_or_none(r['fullname']),
             'userid': r['userid']
         })
 
@@ -401,23 +401,24 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
             print("Fetching userpics for: %s" % journal_short_name)
 
         for p in userpics:
-            pic = urllib.request.urlopen(userpics[p])
-            ext = MimeExtensions.get(pic.info()["Content-Type"], "")
-            picfn = re.sub(r'[*?\\/:<> "|]', "_", p)
-            try:
-                picfn = codecs.utf_8_decode(picfn)[0]
-                picf = open("%s/userpics/%s%s" % (journal_short_name, picfn, ext), "wb")
-            except:
-                # for installations where the above utf_8_decode doesn't work
-                picfn = "".join([ord(x) < 128 and x or "_" for x in picfn])
-                picf = open("%s/userpics/%s%s" % (journal_short_name, picfn, ext), "wb")
-            shutil.copyfileobj(pic, picf)
-            pic.close()
-            picf.close()
-            insert_or_update_icon(cur, verbose,
-                {'keywords': p,
-                    'filename': (picfn+ext),
-                    'url': userpics[p]})
+            if p is not None:
+                pic = urllib.request.urlopen(userpics[p])
+                ext = MimeExtensions.get(pic.info()["Content-Type"], "")
+                picfn = re.sub(r'[*?\\/:<> "|]', "_", p)
+                try:
+                    picfn = codecs.utf_8_decode(picfn)[0]
+                    picf = open("%s/userpics/%s%s" % (journal_short_name, picfn, ext), "wb")
+                except:
+                    # for installations where the above utf_8_decode doesn't work
+                    picfn = "".join([ord(x) < 128 and x or "_" for x in picfn])
+                    picf = open("%s/userpics/%s%s" % (journal_short_name, picfn, ext), "wb")
+                shutil.copyfileobj(pic, picf)
+                pic.close()
+                picf.close()
+                insert_or_update_icon(cur, verbose,
+                    {   'keywords': p,
+                        'filename': (picfn+ext),
+                        'url': userpics[p]})
 
     sync_status['last_max_comment_id'] = new_max_comment_id
 

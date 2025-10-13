@@ -104,7 +104,8 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
     # create a database connection
     conn = connect_to_local_journal_db("%s/journal.db" % journal_short_name, verbose)
     if not conn:
-        os._exit(os.EX_IOERR)
+        fail("failed to cconnect to db")
+
     create_tables_if_missing(conn, verbose)
     cur = conn.cursor()
 
@@ -454,9 +455,12 @@ if __name__ == "__main__":
                       help="build a cache of images referenced in entries")
     args.add_argument("--dont_retry_images", "-d", action='store_false', dest='retry_images',
                       help="don't retry images that failed to cache once already")
+    args.add_argument("--user", type=str, default='ljdump', dest='user_name', help="Name of config file dot config")
     args = args.parse_args()
-    if os.access("ljdump.config", os.F_OK):
-        config = xml.dom.minidom.parse("ljdump.config")
+    config_file = args.user_name + ".config"
+
+    if os.access(config_file, os.F_OK):
+        config = xml.dom.minidom.parse(config_file)
         journal_server = config.documentElement.getElementsByTagName("server")[0].childNodes[0].data
         username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
 

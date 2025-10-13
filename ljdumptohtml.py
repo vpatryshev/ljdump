@@ -35,7 +35,8 @@ import calendar
 from datetime import *
 from xml.etree import ElementTree as ET
 from ljdumpsqlite import *
-
+import time
+from ljdumpops import *
 
 MimeExtensions = {
     "image/gif": ".gif",
@@ -745,8 +746,7 @@ def ljdumptohtml(username, journal_short_name, ljuniq=None, verbose=True, cache_
     # create a database connection
     conn = connect_to_local_journal_db("%s/journal.db" % journal_short_name, verbose)
     if not conn:
-        print("Database could not be opened for journal %s" % journal_short_name)
-        os._exit(os.EX_IOERR)
+        fail("Database could not be opened for journal %s" % journal_short_name)
     cur = conn.cursor()
 
     all_entries = get_all_events(cur, verbose)
@@ -854,7 +854,8 @@ def ljdumptohtml(username, journal_short_name, ljuniq=None, verbose=True, cache_
 
     for i in range(0, len(entries_by_date)):
         entry = entries_by_date[i]
-        entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
+        entry_timestamp = entry['eventtime_unix']
+        entry_date = datetime.utcfromtimestamp(entry_timestamp)
         entry_year_and_month_str = entry_date.strftime("%Y-%m")
 
         # Used for building a table of contents later
@@ -891,7 +892,10 @@ def ljdumptohtml(username, journal_short_name, ljuniq=None, verbose=True, cache_
                     previous_entry=previous_entry,
                     next_entry=next_entry
                 )
-        write_html("%s/entries/entry-%s.html" % (journal_short_name, entry['itemid']), page)
+        filepath = "%s/entries/entry-%s.html" % (journal_short_name, entry['itemid'])
+        write_html(filepath, page)
+
+        os.utime(filepath, (entry_timestamp, entry_timestamp))
 
         entry_body = entry['event']
         (entry_body, uncached) = resolve_cached_image_references(entry_body, image_urls_to_filenames)

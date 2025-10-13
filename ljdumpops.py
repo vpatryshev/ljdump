@@ -19,4 +19,4 @@ MimeExtensions = {
 def fail(message):
     """Fail with a message."""
     print(message)
-    os.__exit(os.EX_IOERR)
+    os._exit(os.EX_IOERR)

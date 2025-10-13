@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import glob
+from ljdumpops import *
 
 
 def clean_markdown_content(content):
@@ -33,9 +34,10 @@ def clean_markdown_content(content):
             continue
 
         # Convert "**Date:** <date>" to "## <date>"
-        date_match = re.match(r'^\*\*Date:\*\*\s+(.+)$', line)
+        date_match = re.match(r'^\*\*Date:\*\*\s+(.... \d+, \d\d\d\d).*$', line)
         if date_match:
-            result.append(f"## {date_match.group(1)}")
+            date=date_match.group(1)
+            result.append(f"## {date}")
             continue
 
         # Remove "**Original:** <url>" lines
@@ -56,8 +58,8 @@ def clean_markdown_content(content):
 
         result.append(line)
 
-    return '\n'.join(result)
-
+    entry = '\n'.join(result)
+    return entry
 
 def combine_markdown_files(input_pattern, output_file):
     """Combine multiple markdown files into one, cleaning as we go."""

@@ -7,7 +7,6 @@ import calendar
 from datetime import *
 import json
 import time
-from ljdumpops import *
 
 MimeExtensions = {
     "image/gif": ".gif",

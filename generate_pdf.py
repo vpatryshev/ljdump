@@ -7,18 +7,7 @@ import subprocess
 import re
 import tempfile
 import json
-
-def load_config(config_file="pdf_config.json"):
-    """Load configuration from JSON file."""
-    if os.path.exists(config_file):
-        with open(config_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {
-        "author": "",
-        "title": "JuanEnrique - Confessions",
-        "input_files": "JuanEnrique/*.md",
-        "output_pdf": "JuanEnrique.pdf"
-    }
+from ljdumpops import *
 
 def clean_html_entities(content):
     """Convert HTML entities to their text equivalents."""
@@ -81,8 +70,6 @@ def remove_navigation_links(content):
 
 def combine_markdown_files(directory="JuanEnrique", output_file="combined.md", config=None):
     """Combine all markdown files in chronological order."""
-    if config is None:
-        config = load_config()
 
     # Get all markdown files and sort them
     pattern = os.path.join(directory, "*.md")
@@ -96,8 +83,8 @@ def combine_markdown_files(directory="JuanEnrique", output_file="combined.md", c
 
     with open(output_file, 'w', encoding='utf-8') as outfile:
         # Add title page with proper pandoc metadata
-        title = config.get("title", "JuanEnrique - Confessions")
-        author = config.get("author", "")
+        title = config.get("title", "No Name")
+        author = config.get("author", "(anonymous)")
 
         outfile.write(f"% {title}\n")
         outfile.write(f"% {author}\n")
@@ -128,7 +115,30 @@ def combine_markdown_files(directory="JuanEnrique", output_file="combined.md", c
     print(f"Combined markdown saved to {output_file}")
     return True
 
-def convert_to_pdf(input_file="combined.md", output_file="JuanEnrique.pdf"):
+def convert_to_pdf(input_file, output_file):
+    """Convert markdown file to PDF using pandoc."""
+    print(f"Converting {input_file} to {output_file}...")
+
+    cmd_pdf = [
+        "pandoc",
+        "--from=markdown",
+        "--pdf-engine=xelatex",
+        "--data-dir", ".",
+        "--template", "template.latex",
+        "--toc",
+#         "--toc-depth=3",
+        "-s", input_file,
+        "-o", output_file
+    ]
+
+    try:
+        subprocess.run(cmd_pdf, check=True, capture_output=True, text=True)
+        print(f"PDF successfully created: {output_file}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error creating PDF: {e.stderr}")
+        return False
+
+def convert_to_pdf_old(input_file="combined.md", output_file="JuanEnrique.pdf"):
     """Convert markdown file to PDF using pandoc."""
     print(f"Converting {input_file} to HTML first...")
 
@@ -144,6 +154,13 @@ def convert_to_pdf(input_file="combined.md", output_file="JuanEnrique.pdf"):
         "--toc",
         "--toc-depth=2"
     ]
+
+    try:
+        subprocess.run(cmd_html, check=True, capture_output=True, text=True)
+        print(f"HTML successfully created: {output_html}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error creating HTML: {e.stderr}")
+        return False
 
     try:
         subprocess.run(cmd_html, check=True, capture_output=True, text=True)
@@ -192,6 +209,7 @@ def convert_to_pdf(input_file="combined.md", output_file="JuanEnrique.pdf"):
             output_html,
             output_file
         ]
+
         subprocess.run(cmd_pdf, check=True, capture_output=True, text=True)
         print(f"PDF successfully created with wkhtmltopdf: {output_file}")
         return True
@@ -213,13 +231,10 @@ def convert_to_pdf(input_file="combined.md", output_file="JuanEnrique.pdf"):
     return False
 
 def main():
-    # Change to confessions directory
-    os.chdir('/Users/vladpatryshev/projects/confessions')
 
     # Load configuration
-    config = load_config("pdf_config.json")
+    config = load_config("confessions.json")
     print(f"Loaded config: Title='{config['title']}', Author='{config['author']}'")
-
     # Create temporary combined markdown file
     temp_md = "combined_temp.md"
 
@@ -229,7 +244,7 @@ def main():
             return
 
         # Convert to PDF
-        output_pdf = config.get("output_pdf", "JuanEnrique.pdf")
+        output_pdf = config.get("output_pdf")
         if convert_to_pdf(input_file=temp_md, output_file=output_pdf):
             print(f"\n✓ Success! PDF created: {output_pdf}")
         else:
@@ -240,7 +255,7 @@ def main():
         #        if os.path.exists(temp_md):
         #            os.remove(temp_md)
         #            print(f"Cleaned up temporary file: {temp_md}")
-        print("Done with PDF?")
+        print("Done with PDF.")
 
 if __name__ == "__main__":
     main()

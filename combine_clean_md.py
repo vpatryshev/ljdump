@@ -12,7 +12,6 @@ import sys
 import glob
 from ljdumpops import *
 
-
 def clean_markdown_content(content):
     """Clean up markdown content according to specified rules."""
     lines = content.split('\n')
@@ -61,7 +60,7 @@ def clean_markdown_content(content):
     entry = '\n'.join(result)
     return entry
 
-def combine_markdown_files(input_pattern, output_file):
+def combine_markdown_files(config, input_pattern, output_file):
     """Combine multiple markdown files into one, cleaning as we go."""
     # Get all matching files and sort them
     files = sorted(glob.glob(input_pattern))
@@ -75,10 +74,15 @@ def combine_markdown_files(input_pattern, output_file):
     combined_content = []
 
     # Add front matter
-    combined_content.append("---")
-    combined_content.append("title: JuanEnrique - Confessions")
-    combined_content.append("---")
-    combined_content.append("")
+    title = config.get("title", "No Name")
+    author = config.get("author", "(anonymous)")
+    combined_content.append(f"% {title}\n")
+    combined_content.append(f"% {author}\n")
+    combined_content.append("% \n\n")
+#     combined_content.append("---")
+#     combined_content.append("title: JuanEnrique - Confessions")
+#     combined_content.append("---")
+#     combined_content.append("")
 
     for filename in files:
         print(f"Processing: {filename}")
@@ -102,10 +106,10 @@ def combine_markdown_files(input_pattern, output_file):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        fail("Usage: combine_clean_md.py <input_pattern> <output_file>\n" +
+        fail("Usage: combine_clean_md.py id <input_pattern> <output_file>\n" +
              "Example: combine_clean_md.py 'JuanEnrique_markdown/*.md' JuanEnrique_combined.md")
-
-    input_pattern = sys.argv[1]
-    output_file = sys.argv[2]
-
-    combine_markdown_files(input_pattern, output_file)
+    id=sys.argv[1]
+    input_pattern = sys.argv[2]
+    output_file = sys.argv[3]
+    config = load_config(f"{id}.json"   )
+    combine_markdown_files(config, input_pattern, output_file)

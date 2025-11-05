@@ -79,9 +79,9 @@ def html_to_markdown(html_content):
 #         print(md)
 
     # Convert <pre>
-    md = re.sub(r'<code><pre>(.*?)</pre></code>', r'```\1```', md, flags=re.IGNORECASE|re.DOTALL)
-    md = re.sub(r'<pre><code>(.*?)</code></pre>', r'```\1```', md, flags=re.IGNORECASE|re.DOTALL)
-    md = re.sub(r'<pre>(.*?)</pre>', r'```\1```', md, flags=re.IGNORECASE|re.DOTALL)
+    md = re.sub(r'<code><pre>(.*?)</pre></code>', r'\n```\1\n```\n', md, flags=re.IGNORECASE|re.DOTALL)
+    md = re.sub(r'<pre><code>(.*?)</code></pre>', r'\n```\1\n```\n', md, flags=re.IGNORECASE|re.DOTALL)
+    md = re.sub(r'<pre>(.*?)</pre>', r'\n```\1\n```\n', md, flags=re.IGNORECASE|re.DOTALL)
 
     # Convert <code>
     md = re.sub(r'<code>(.*?)</code>', r'`\1`', md, flags=re.IGNORECASE|re.DOTALL)
@@ -139,8 +139,8 @@ def create_entry_markdown(entry, comments, moods_by_id):
     if entry['props_current_music']:
         lines.append(f"**Music:** {entry['props_current_music']}")
 
-    lines.append("")
-    lines.append("---")
+#     lines.append("")
+#     lines.append("---")
     lines.append("")
 
     # Entry content

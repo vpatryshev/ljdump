@@ -79,10 +79,6 @@ def combine_markdown_files(config, input_pattern, output_file):
     combined_content.append(f"% {title}\n")
     combined_content.append(f"% {author}\n")
     combined_content.append("% \n\n")
-#     combined_content.append("---")
-#     combined_content.append("title: JuanEnrique - Confessions")
-#     combined_content.append("---")
-#     combined_content.append("")
 
     for filename in files:
         print(f"Processing: {filename}")

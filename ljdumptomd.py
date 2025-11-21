@@ -55,8 +55,8 @@ def html_to_markdown(html_content):
     # Convert links
     md = re.sub(r'<a\s+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', r'[\2](\1)', md, flags=re.IGNORECASE|re.DOTALL)
 
-    # Convert images
-    md = re.sub(r'<img\s+src=["\']([^"\']+)["\'][^>]*/?>', r'![](\1)', md, flags=re.IGNORECASE)
+    # DON"T Convert images
+#    md = re.sub(r'<img\s+src=["\']([^"\']+)["\'][^>]*/?>', r'![](\1)', md, flags=re.IGNORECASE)
 
     # Convert headers (h1-h6)
     for level in range(1, 7):

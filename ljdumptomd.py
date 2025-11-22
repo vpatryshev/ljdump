@@ -29,6 +29,9 @@
 import os, codecs, argparse, xml.dom.minidom
 from datetime import datetime
 import re
+import urllib.request
+import urllib.parse
+import hashlib
 from ljdumpsqlite import *
 
 
@@ -38,7 +41,7 @@ def write_markdown(filename, markdown_content):
         f.write(markdown_content)
 
 
-def html_to_markdown(html_content):
+def html_to_markdown(html_content, output_dir=None):
     """Convert HTML content to Markdown (basic conversion)."""
 
     # Remove HTML line breaks
@@ -58,6 +61,8 @@ def html_to_markdown(html_content):
     # DON"T Convert images
 #    md = re.sub(r'<img\s+src=["\']([^"\']+)["\'][^>]*/?>', r'![](\1)', md, flags=re.IGNORECASE)
 
+    md = handle_images(md, output_dir)
+
     # Convert headers (h1-h6)
     for level in range(1, 7):
         md = re.sub(rf'<h{level}[^>]*>(.*?)</h{level}>', lambda m: '#' * level + ' ' + m.group(1) + '\n', md, flags=re.IGNORECASE|re.DOTALL)
@@ -74,10 +79,6 @@ def html_to_markdown(html_content):
     # Convert blockquotes
     md = re.sub(r'<blockquote[^>]*>(.*?)</blockquote>', lambda m: '\n'.join('> ' + line for line in m.group(1).strip().split('\n')), md, flags=re.IGNORECASE|re.DOTALL)
 
-#     if (re.search("line = s takeWhile", md)):
-#         print("\n\n\nGOT SUSPECT 5")
-#         print(md)
-
     # Convert <pre>
     md = re.sub(r'<code><pre>(.*?)</pre></code>', r'\n```\1\n```\n', md, flags=re.IGNORECASE|re.DOTALL)
     md = re.sub(r'<pre><code>(.*?)</code></pre>', r'\n```\1\n```\n', md, flags=re.IGNORECASE|re.DOTALL)
@@ -86,16 +87,6 @@ def html_to_markdown(html_content):
     # Convert <code>
     md = re.sub(r'<code>(.*?)</code>', r'`\1`', md, flags=re.IGNORECASE|re.DOTALL)
 
-#     if (re.search("line = s takeWhile", md)):
-#         print("\n\n\nGOT CONVERTED")
-#         print(md)
-#         os._exit(os.EX_IOERR)
-
-#     if (gotapre):
-#         print("\n\n\nGOT IT!!!!")
-#         print(md)
-#         os._exit(os.EX_IOERR)
-#
     # Convert paragraphs
     md = re.sub(r'<p[^>]*>', '', md, flags=re.IGNORECASE)
     md = re.sub(r'</p>', '\n\n', md, flags=re.IGNORECASE)
@@ -108,8 +99,61 @@ def html_to_markdown(html_content):
 
     return md.strip()
 
+def handle_images(html_content, output_dir=None):
+    """Download images and change references in the content"""
+    if not output_dir:
+        return html_content
 
-def create_entry_markdown(entry, comments, moods_by_id):
+    # Pattern to match <img> tags and extract src
+    img_pattern = r'<img\s+([^>]*?)src=["\']([^"\']+)["\']([^>]*?)/?>'
+
+    def download_and_replace(match):
+        before_src = match.group(1)
+        img_url = match.group(2)
+        after_src = match.group(3)
+
+        # Skip if it's already a local file (doesn't start with http)
+        if not img_url.startswith('http'):
+            return match.group(0)
+
+        try:
+            # Create a unique filename based on URL hash
+            url_hash = hashlib.md5(img_url.encode()).hexdigest()[:12]
+
+            # Try to get extension from URL
+            parsed_url = urllib.parse.urlparse(img_url)
+            path = parsed_url.path
+            ext = os.path.splitext(path)[1]
+            if not ext or len(ext) > 5:
+                ext = '.jpg'  # default
+
+            local_filename = f"img_{url_hash}{ext}"
+            local_path = os.path.join(output_dir, local_filename)
+
+            # Download image if it doesn't exist
+            if not os.path.exists(local_path):
+                print(f"Downloading image: {img_url}")
+                headers = {'User-Agent': 'Mozilla/5.0 (compatible; ljdumptomd/1.0)'}
+                req = urllib.request.Request(img_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    img_data = response.read()
+                    with open(local_path, 'wb') as f:
+                        f.write(img_data)
+                print(f"  Saved as: {local_filename}")
+
+            # Return updated img tag with local reference
+            return f'<img {before_src}src="{local_filename}"{after_src}>'
+
+        except Exception as e:
+            print(f"Warning: Failed to download {img_url}: {e}")
+            # Return original tag if download fails
+            return match.group(0)
+
+    # Replace all img tags
+    result = re.sub(img_pattern, download_and_replace, html_content, flags=re.IGNORECASE)
+    return result
+
+def create_entry_markdown(entry, comments, moods_by_id, output_dir=None):
     """Create markdown content for a single entry."""
     lines = []
 
@@ -144,7 +188,7 @@ def create_entry_markdown(entry, comments, moods_by_id):
     lines.append("")
 
     # Entry content
-    entry_content = html_to_markdown(entry['event'])
+    entry_content = html_to_markdown(entry['event'], output_dir)
     lines.append(entry_content)
 
     # Comments
@@ -177,7 +221,7 @@ def create_entry_markdown(entry, comments, moods_by_id):
                 lines.append(f"**Date:** {c_date_str}")
 
             lines.append("")
-            comment_content = html_to_markdown(comment['body'])
+            comment_content = html_to_markdown(comment['body'], output_dir)
             lines.append(comment_content)
             lines.append("")
 
@@ -319,7 +363,8 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
         markdown_content = create_entry_markdown(
             entry=entry,
             comments=comments_grouped_by_entry[entry['itemid']],
-            moods_by_id=moods_by_id
+            moods_by_id=moods_by_id,
+            output_dir=output_dir
         )
 
         # Write to file

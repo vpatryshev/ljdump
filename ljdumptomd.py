@@ -32,6 +32,7 @@ import re
 import urllib.request
 import urllib.parse
 import hashlib
+import subprocess
 from ljdumpsqlite import *
 
 
@@ -87,9 +88,22 @@ def html_to_markdown(html_content, output_dir=None):
     # Convert <code>
     md = re.sub(r'<code>(.*?)</code>', r'`\1`', md, flags=re.IGNORECASE|re.DOTALL)
 
+    # convert strong
+    md = re.sub(r'<strong>(.*?)</strong>', r'**\1**', md, flags=re.IGNORECASE|re.DOTALL)
+    md = re.sub(r'<b[^>]*>(.*?)</b>', r'**\1**', md, flags=re.IGNORECASE)
+
+    # convert sub and sup
+    md = re.sub(r'<sub[^>]*>(.*?)</sub>', r'~\1~', md, flags=re.IGNORECASE|re.DOTALL)
+    md = re.sub(r'<sup[^>]*>(.*?)</sup>', r'^\1^', md, flags=re.IGNORECASE|re.DOTALL)
+
     # Convert paragraphs
     md = re.sub(r'<p[^>]*>', '', md, flags=re.IGNORECASE)
     md = re.sub(r'</p>', '\n\n', md, flags=re.IGNORECASE)
+
+    # remove spans and brs and bad bs
+    md = re.sub(r'<span[^>]*>', '', md, flags=re.IGNORECASE)
+    md = re.sub(r'</span>', '\n\n', md, flags=re.IGNORECASE)
+    md = re.sub(r'<br[^>]*/>', '\n\n', md, flags=re.IGNORECASE)
 
 #     # Remove remaining HTML tags
 #     md = re.sub(r'<[^>]+>', '', md)
@@ -140,6 +154,33 @@ def handle_images(html_content, output_dir=None):
                     with open(local_path, 'wb') as f:
                         f.write(img_data)
                 print(f"  Saved as: {local_filename}")
+
+            # Check if the file is actually WebP (regardless of extension)
+            # This works for both newly downloaded and existing files
+            png_filename = f"img_{url_hash}.png"
+            png_path = os.path.join(output_dir, png_filename)
+
+            # If PNG version exists, use it
+            if os.path.exists(png_path):
+                local_filename = png_filename
+            elif os.path.exists(local_path):
+                # Check if it's WebP and needs conversion
+                try:
+                    file_check = subprocess.run(['file', '-b', local_path],
+                                              capture_output=True, text=True, timeout=5)
+                    file_type = file_check.stdout.strip()
+
+                    if 'Web/P' in file_type or ('RIFF' in file_type and 'Web' in file_type):
+                        # It's a WebP file, convert to PNG
+                        print(f"  Converting WebP to PNG: {local_filename} -> {png_filename}")
+                        subprocess.run(['sips', '-s', 'format', 'png', local_path,
+                                      '--out', png_path],
+                                     capture_output=True, timeout=30)
+                        # Use PNG file instead
+                        local_filename = png_filename
+
+                except Exception as e:
+                    print(f"  Warning: Could not check/convert file format: {e}")
 
             # Return updated img tag with local reference
             return f'<img {before_src}src="{local_filename}"{after_src}>'

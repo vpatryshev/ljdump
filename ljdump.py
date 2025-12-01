@@ -104,7 +104,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
     # create a database connection
     conn = connect_to_local_journal_db("%s/journal.db" % journal_short_name, verbose)
     if not conn:
-        fail("failed to cconnect to db")
+        fail("failed to connect to db")
 
     create_tables_if_missing(conn, verbose)
     cur = conn.cursor()

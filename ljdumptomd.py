@@ -102,7 +102,7 @@ def html_to_markdown(html_content, output_dir=None):
 
     # remove spans and brs and bad bs
     md = re.sub(r'<span[^>]*>', '', md, flags=re.IGNORECASE)
-    md = re.sub(r'</span>', '\n\n', md, flags=re.IGNORECASE)
+    md = re.sub(r'</span>', 'Ï', md, flags=re.IGNORECASE)
     md = re.sub(r'<br[^>]*/>', '\n\n', md, flags=re.IGNORECASE)
 
 #     # Remove remaining HTML tags
@@ -291,21 +291,24 @@ def filter_entries(entries, tags=None, start_date=None, end_date=None):
     """Filter entries by tags and/or date range."""
     filtered = []
 
+    print(f"Filtering totally {len(entries)} entries looking for {tags}.")
+
     for entry in entries:
-        # Check date range
-        if start_date or end_date:
-            entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
-            if start_date and entry_date < start_date:
-                continue
-            if end_date and entry_date > end_date:
-                continue
+        # Check date range#
+        entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
+        if start_date and entry_date < start_date:
+            continue
+        if end_date and entry_date > end_date:
+            continue
+
+        print(f"{start_date} < {entry_date} < {end_date} !")
 
         # Check tags
         if tags:
             entry_tags = []
             if entry['props_taglist']:
                 entry_tags = [t.strip() for t in entry['props_taglist'].split(',')]
-
+ #           print(f"tags {entry_tags} has {tags} ?")
             # Check if any of the requested tags match
             has_matching_tag = False
             for tag in tags:
@@ -324,7 +327,7 @@ def filter_entries(entries, tags=None, start_date=None, end_date=None):
 def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
     """Convert LiveJournal/Dreamwidth entries from database to Markdown files."""
     if verbose:
-        print(f"Starting conversion for: {journal_short_name}")
+        print(f"Starting conversion for: {journal_short_name} for tags ${tags}")
 
     # Parse date range if provided
     start_date, end_date = parse_date_range(date_range)
@@ -367,11 +370,6 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
     # Filter entries
     filtered_entries = filter_entries(entries_by_date, tag_list, start_date, end_date)
 
-#     for entry in filtered_entries:
-#       print(entry['id'], entry['eventtime_unix'])
-#
-#     print("And?")
-#     os._exit(os.EX_USAGE)
 
     if verbose:
         print(f"Found {len(all_entries)} total entries")
@@ -383,6 +381,7 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
 
     # Create output directory
     output_dir = f"{journal_short_name}_markdown"
+
     try:
         os.mkdir(output_dir)
     except OSError as e:
@@ -395,6 +394,7 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
 
     for entry in filtered_entries:
         entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
+#        print(f"entry at {entry_date}")
 
         # Create filename with date and itemid
         filename = f"{entry_date.strftime('%Y-%m-%d')}_{entry['itemid']}.md"

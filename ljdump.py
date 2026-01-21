@@ -483,10 +483,10 @@ if __name__ == "__main__":
             if len(ljuniq_els) > 0:
                 ljuniq = ljuniq_els[0].childNodes[0].data
     else:
-        print("ljdump - livejournal archiver")
+        print("ljdump - livejournal/dreamwidth archiver")
         print
-        default_server = "https://livejournal.com"
-        journal_server = input("Alternative server to use (e.g. 'https://www.dreamwidth.org'), or hit return for '%s': " % default_server) or default_server
+        default_server = "https://dreamwidth.org"
+        journal_server = input("Alternative server to use (e.g. 'https://www.livejournal.com'), or hit return for '%s': " % default_server) or default_server
         print
         print("Enter your Livejournal (or Dreamwidth, etc) username and password.")
         print

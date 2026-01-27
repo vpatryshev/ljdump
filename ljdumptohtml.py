@@ -893,6 +893,10 @@ def ljdumptohtml(username, journal_short_name, ljuniq=None, verbose=True, cache_
                     next_entry=next_entry
                 )
         filepath = "%s/entries/entry-%s.html" % (journal_short_name, entry['itemid'])
+        if entry["itemid"] == "23588":
+            print("Oops: 23588")
+            os._exit(os.EX_OK)
+
         write_html(filepath, page)
 
         os.utime(filepath, (entry_timestamp, entry_timestamp))

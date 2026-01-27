@@ -529,7 +529,7 @@ class DreamwidthScraper:
         skipped_count = 0
         consecutive_empty_pages = 0
         consecutive_all_exist_pages = 0
-        max_consecutive_exist = 3  # Stop after 3 pages where everything exists
+        max_pages = (max_entries + entries_per_page - 1) / entries_per_page  # Stop after 3 pages where everything exists
 
         while True:
             # Fetch journal page
@@ -560,6 +560,14 @@ class DreamwidthScraper:
             for entry_url in entry_urls:
                 itemid = self.extract_itemid_from_url(entry_url)
 
+                # Skip if we already have this entry
+                if itemid and self.entry_exists(itemid):
+                    page_existing_count += 1
+                    skipped_count += 1
+                    self.log(f"SKIP {itemid}  - already exists")
+#                    self.log(f"SKIP {itemid} [{date_str}] - already exists: {entry_data.get('subject', 'NO TITLE')[:50]}")
+                    continue
+
                 # Always scrape to get the date, even if we skip storing it
                 entry_data = self.scrape_entry(entry_url)
                 if not entry_data:
@@ -570,13 +578,6 @@ class DreamwidthScraper:
                 if entry_data.get('eventtime'):
                     date_str = entry_data['eventtime'].strftime('%Y-%m-%d %H:%M')
                     page_dates.append(entry_data['eventtime'])
-
-                # Skip if we already have this entry
-                if itemid and self.entry_exists(itemid):
-                    page_existing_count += 1
-                    skipped_count += 1
-                    self.log(f"SKIP {itemid} [{date_str}] - already exists: {entry_data.get('subject', 'NO TITLE')[:50]}")
-                    continue
 
                 # This is a new entry
                 all_entries.append(entry_data)
@@ -603,7 +604,7 @@ class DreamwidthScraper:
 
                 # Only stop after multiple consecutive pages with all existing
                 # This allows us to continue past gaps in the data
-                if consecutive_all_exist_pages >= max_consecutive_exist:
+                if consecutive_all_exist_pages >= max_pages:
                     self.log(f"\n*** Found {consecutive_all_exist_pages} consecutive pages with all existing entries - stopping ***")
                     self.log("This indicates we've fully caught up with existing data")
                     break

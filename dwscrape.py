@@ -95,15 +95,32 @@ class DreamwidthHTMLParser(HTMLParser):
         self.in_title = False
         self.in_content = False
         self.in_tags = False
+        self.in_date = False
         self.current_tag_stack = []
         self.title_text = []
         self.content_parts = []
         self.tags = []
         self.current_date = None
 
+        # Track entries with their metadata from listing page
+        self.entries = []  # List of dicts with 'url', 'title', 'date'
+        self.current_entry = None
+        self.current_entry_title = []
+        self.current_entry_date = []
+        self.datetime_depth = 0  # Track nesting of datetime spans
+
     def handle_starttag(self, tag, attrs):
         attrs_dict = dict(attrs)
         self.current_tag_stack.append((tag, attrs_dict))
+
+        # Look for entry containers (article or div with entry-wrapper or entry class)
+        if tag in ['article', 'div']:
+            classes = attrs_dict.get('class', '')
+            if 'entry-wrapper' in classes or ('entry' in classes and 'entry-content' not in classes):
+                # Start tracking a new entry
+                self.current_entry = {'url': None, 'title': '', 'date': ''}
+                self.current_entry_title = []
+                self.current_entry_date = []
 
         # Look for entry links
         if tag == 'a':
@@ -111,13 +128,25 @@ class DreamwidthHTMLParser(HTMLParser):
             # Match patterns like /344866.html or https://journal.dreamwidth.org/344866.html
             if re.search(r'/\d+\.html', href):
                 self.entry_links.append(href)
+                # If we're in an entry and haven't found a URL yet, use this one
+                if self.current_entry is not None and self.current_entry['url'] is None:
+                    self.current_entry['url'] = href
 
         # Track if we're in important sections
         if tag in ['h1', 'h2', 'h3']:
             # Could be title
             classes = attrs_dict.get('class', '')
-            if 'entry' in classes or 'subject' in classes or 'title' in classes:
+            if self.current_entry and 'entry-title' in classes:
                 self.in_title = True
+
+        # Look for date/time elements - specifically the datetime span
+        if tag == 'span':
+            classes = attrs_dict.get('class', '')
+            if self.current_entry and 'datetime' in classes:
+                self.in_date = True
+                self.datetime_depth = 1
+            elif self.in_date:
+                self.datetime_depth += 1
 
         if tag == 'div' or tag == 'article':
             classes = attrs_dict.get('class', '')
@@ -127,16 +156,41 @@ class DreamwidthHTMLParser(HTMLParser):
                 self.in_tags = True
 
     def handle_endtag(self, tag):
+        # Check if we're closing an entry container
+        if self.current_tag_stack and tag in ['article', 'div']:
+            attrs_dict = self.current_tag_stack[-1][1] if self.current_tag_stack else {}
+            classes = attrs_dict.get('class', '')
+            if 'entry-wrapper' in classes and self.current_entry:
+                # Finalize current entry
+                self.current_entry['title'] = ' '.join(self.current_entry_title).strip()
+                self.current_entry['date'] = ' '.join(self.current_entry_date).strip()
+                if self.current_entry['url']:
+                    self.entries.append(self.current_entry)
+                self.current_entry = None
+                self.current_entry_title = []
+                self.current_entry_date = []
+
         if self.current_tag_stack and self.current_tag_stack[-1][0] == tag:
             self.current_tag_stack.pop()
 
         if tag in ['h1', 'h2', 'h3']:
             self.in_title = False
+        if tag == 'span' and self.in_date:
+            self.datetime_depth -= 1
+            if self.datetime_depth <= 0:
+                self.in_date = False
+                self.datetime_depth = 0
         if tag in ['div', 'article']:
             self.in_content = False
             self.in_tags = False
 
     def handle_data(self, data):
+        if self.in_title and self.current_entry is not None:
+            self.current_entry_title.append(data.strip())
+        if self.in_date and self.current_entry is not None:
+            self.current_entry_date.append(data.strip())
+
+        # Keep old functionality for single-entry parsing
         if self.in_title:
             self.title_text.append(data.strip())
         if self.in_content:
@@ -389,7 +443,7 @@ class DreamwidthScraper:
     def scrape_journal_page(self, skip=0):
         """Scrape a journal page (paginated by skip parameter).
 
-        Returns list of entry URLs found on this page.
+        Returns list of entry dicts with 'url', 'title', 'date' keys from listing page.
         """
         # Build URL - use different parameters when authenticated
         if self.authenticated:
@@ -421,23 +475,52 @@ class DreamwidthScraper:
         parser = DreamwidthHTMLParser()
         parser.feed(html)
 
-        entry_urls = []
+        # Debug logging
+        self.log(f"  Parser found {len(parser.entries)} entries with metadata")
+        self.log(f"  Parser found {len(parser.entry_links)} entry links")
+
+        # Use the enhanced entry metadata if available, fall back to just URLs
+        entries = []
         seen_itemids = set()
-        for href in parser.entry_links:
-            # Skip comment links
-            if '#' in href:
-                continue
 
-            full_url = urljoin(self.base_url, href)
+        if parser.entries:
+            # Use metadata from parser
+            self.log(f"  Using enhanced parser entries with metadata")
+            for entry in parser.entries:
+                href = entry['url']
+                if '#' in href:
+                    continue
 
-            # Extract itemid to avoid duplicates
-            itemid = self.extract_itemid_from_url(full_url)
-            if itemid and itemid not in seen_itemids:
-                seen_itemids.add(itemid)
-                entry_urls.append(full_url)
+                full_url = urljoin(self.base_url, href)
+                itemid = self.extract_itemid_from_url(full_url)
 
-        self.log(f"Found {len(entry_urls)} unique entries on page (skip={skip})")
-        return entry_urls
+                if itemid and itemid not in seen_itemids:
+                    seen_itemids.add(itemid)
+                    entries.append({
+                        'url': full_url,
+                        'title': entry['title'] or 'NO TITLE',
+                        'date': entry['date'] or 'NO DATE'
+                    })
+        else:
+            # Fallback to old behavior (just URLs)
+            self.log(f"  Using fallback mode (entry_links only)")
+            for href in parser.entry_links:
+                if '#' in href:
+                    continue
+
+                full_url = urljoin(self.base_url, href)
+                itemid = self.extract_itemid_from_url(full_url)
+
+                if itemid and itemid not in seen_itemids:
+                    seen_itemids.add(itemid)
+                    entries.append({
+                        'url': full_url,
+                        'title': 'NO TITLE',
+                        'date': 'NO DATE'
+                    })
+
+        self.log(f"Found {len(entries)} unique entries on page (skip={skip})")
+        return entries
 
     def scrape_entry(self, entry_url):
         """Scrape a single entry page and return entry data dict."""
@@ -506,6 +589,216 @@ class DreamwidthScraper:
 
         return entry_data
 
+    def scrape_archive_page(self):
+        """Scrape the archive page to get all year/month links.
+
+        Returns:
+            List of month URLs (e.g., ['https://kdanilov.dreamwidth.org/2022/11/', ...])
+        """
+        url = f"{self.base_url}/archive"
+        self.log(f"Fetching archive page: {url}")
+
+        html = self.fetch_page(url)
+        if not html:
+            self.log("  ✗ Failed to fetch archive page")
+            return []
+
+        self.log(f"  ✓ Archive page fetched ({len(html)} bytes)")
+
+        month_links = []
+
+        # Find month links directly from archive page
+        # Pattern matches both relative and full URLs: /2022/11/ or https://kdanilov.dreamwidth.org/2022/11/
+        # We want YYYY/MM/ patterns (2 digits for month)
+        self.log("  Searching for direct month archive links (usually current year)...")
+        month_pattern = r'href="(?:https?://[^/]+)?(/\d{4}/\d{2}/)(?:"|\?)'
+        month_matches = re.findall(month_pattern, html)
+        self.log(f"  Found {len(month_matches)} direct month link matches (may include duplicates)")
+
+        for match in month_matches:
+            full_url = urljoin(self.base_url, match)
+            if full_url not in month_links:
+                month_links.append(full_url)
+                self.log(f"    • {full_url}")
+
+        # ALWAYS check for year links and visit them (older years are only linked as years)
+        self.log("\n  Searching for year archive links (for older years)...")
+
+        # Find year links (YYYY/ only)
+        # Match full URLs like https://kdanilov.dreamwidth.org/2017/
+        year_pattern = r'href="(https?://[^/]+/\d{4}/)(?:"|\?)'
+        year_matches = re.findall(year_pattern, html)
+
+        year_links = []
+        for match in year_matches:
+            # Make sure it's year-only (ends with YYYY/ not YYYY/MM/)
+            if re.match(r'.*/\d{4}/$', match):
+                if match not in year_links:
+                    year_links.append(match)
+
+        self.log(f"  Found {len(year_links)} year archives")
+
+        # Visit each year page to get month links
+        for year_url in year_links:
+            self.log(f"    Fetching year archive: {year_url}")
+            year_html = self.fetch_page(year_url, delay=True)
+            if not year_html:
+                self.log(f"      ✗ Failed to fetch year page")
+                continue
+
+            # Find month links in this year page
+            year_month_matches = re.findall(month_pattern, year_html)
+            self.log(f"      Found {len(year_month_matches)} month links in this year")
+            for match in year_month_matches:
+                full_url = urljoin(self.base_url, match)
+                if full_url not in month_links:
+                    month_links.append(full_url)
+                    self.log(f"        • {full_url}")
+
+        # Sort by date (newest first)
+        month_links.sort(reverse=True)
+
+        self.log(f"Found {len(month_links)} month archives to scrape")
+        return month_links
+
+    def scrape_month_page(self, month_url):
+        """Scrape a month archive page to get all entry URLs.
+
+        Args:
+            month_url: URL like 'https://kdanilov.dreamwidth.org/2022/11/'
+
+        Returns:
+            List of entry dicts with 'url', 'title', 'date' keys
+        """
+        self.log(f"  Fetching month page: {month_url}")
+        html = self.fetch_page(month_url, delay=True)
+        if not html:
+            self.log(f"  ✗ Failed to fetch month page")
+            return []
+
+        self.log(f"  ✓ Month page fetched ({len(html)} bytes), parsing entries...")
+        entries = []
+
+        # The structure is <dt>date</dt><dd>time+entry</dd>
+        # We need to extract date-entry pairs from the <dl> structure
+
+        # Pattern for date links with full URL: <dt><a href="https://kdanilov.dreamwidth.org/2022/11/29/">29th</a></dt>
+        date_pattern = r'<dt><a href="https?://[^/]+/(\d{4})/(\d{2})/(\d{2})/">(\d+)(?:st|nd|rd|th)?</a></dt>'
+
+        # Pattern for the <dd> section that follows, containing time and entry
+        # <dd><span class="datetime"><span class="time">05:58 am</span></span>...<h3 class="entry-title"><a title="..." href="...">title</a></h3>
+        dd_pattern = r'<dd>.*?<span class="time">([^<]+)</span>.*?<h3[^>]*class="[^"]*entry-title[^"]*"[^>]*><a[^>]*title="([^"]*)"[^>]*href="([^"]+)"[^>]*>([^<]+)</a></h3>.*?</dd>'
+
+        # Find all date entries
+        date_matches = list(re.finditer(date_pattern, html))
+
+        # Find all dd entries
+        dd_matches = list(re.finditer(dd_pattern, html, re.DOTALL | re.IGNORECASE))
+
+        # Match them up (should be 1:1)
+        for i in range(min(len(date_matches), len(dd_matches))):
+            date_match = date_matches[i]
+            dd_match = dd_matches[i]
+
+            year, month, day, day_num = date_match.groups()
+            time_str, title_attr, url, title_text = dd_match.groups()
+
+            date_str = f"{year}-{month}-{day} {time_str}"
+
+            # Use title attribute if available, otherwise use title text
+            title = title_attr if title_attr else title_text
+
+            entries.append({
+                'url': url,
+                'title': title,
+                'date': date_str
+            })
+
+        self.log(f"  Found {len(entries)} entries in {month_url}")
+        return entries
+
+    def scrape_journal_from_archive(self, max_entries=None):
+        """Scrape journal using archive pages (more reliable than pagination).
+
+        Args:
+            max_entries: Maximum number of entries to scrape (None for all)
+
+        Returns:
+            List of entry data dictionaries
+        """
+        # Login first if credentials are provided
+        if self.username and self.password:
+            self.login()
+
+        # Load existing entries from database
+        self.load_existing_itemids()
+
+        # Get all month archive URLs
+        month_urls = self.scrape_archive_page()
+        if not month_urls:
+            self.log("No archive pages found")
+            return []
+
+        all_entries = []
+        new_entries_count = 0
+        skipped_count = 0
+
+        # Process each month
+        for month_idx, month_url in enumerate(month_urls, 1):
+            self.log(f"\n=== Processing archive {month_idx}/{len(month_urls)}: {month_url} ===")
+
+            # Get all entry URLs from this month
+            entries = self.scrape_month_page(month_url)
+
+            if not entries:
+                self.log(f"  No entries found in this month, moving to next archive")
+                continue
+
+            self.log(f"  Processing {len(entries)} entries from this month...")
+
+            # Scrape each entry
+            for entry_idx, entry_meta in enumerate(entries, 1):
+                entry_url = entry_meta['url']
+                entry_title_from_listing = entry_meta['title']
+                entry_date_from_listing = entry_meta['date']
+
+                itemid = self.extract_itemid_from_url(entry_url)
+
+                # Skip if we already have this entry
+                if itemid and self.entry_exists(itemid):
+                    skipped_count += 1
+                    self.log(f"  [{entry_idx}/{len(entries)}] SKIP {itemid} [{entry_date_from_listing}] - already exists: {entry_title_from_listing[:50]}")
+                    continue
+
+                # Scrape the full entry
+                self.log(f"  [{entry_idx}/{len(entries)}] Fetching entry {itemid}: {entry_title_from_listing[:50]}")
+                entry_data = self.scrape_entry(entry_url)
+                if not entry_data:
+                    self.log(f"  [{entry_idx}/{len(entries)}] ✗ Failed to scrape entry {itemid}")
+                    continue
+
+                # Format date for logging
+                date_str = "NO DATE"
+                if entry_data.get('eventtime'):
+                    date_str = entry_data['eventtime'].strftime('%Y-%m-%d %H:%M')
+
+                # This is a new entry
+                all_entries.append(entry_data)
+                new_entries_count += 1
+                self.existing_itemids.add(entry_data['itemid'])  # Add to cache
+                self.log(f"  [{entry_idx}/{len(entries)}] ✓ NEW  {itemid} [{date_str}] - {entry_data.get('subject', 'NO TITLE')[:50]}")
+
+                if max_entries and new_entries_count >= max_entries:
+                    self.log(f"\n!!! Reached max_entries limit: {max_entries}")
+                    self.log(f"Total: {new_entries_count} new, {skipped_count} skipped")
+                    return all_entries
+
+            self.log(f"  Month complete: {new_entries_count} total new, {skipped_count} total skipped so far")
+
+        self.log(f"\n=== Archive scraping complete ===")
+        self.log(f"Total: {new_entries_count} new entries, {skipped_count} skipped")
+        return all_entries
+
     def scrape_journal(self, max_entries=None):
         """Scrape all entries from a journal.
 
@@ -532,11 +825,12 @@ class DreamwidthScraper:
         max_pages = (max_entries + entries_per_page - 1) / entries_per_page  # Stop after 3 pages where everything exists
 
         while True:
-            # Fetch journal page
-            entry_urls = self.scrape_journal_page(skip)
-            self.log(f"Found these urls: {entry_urls}")
+            # Fetch journal page with entry metadata
+            entries = self.scrape_journal_page(skip)
+            if self.verbose:
+                self.log(f"Found these entries: {[e['url'] for e in entries]}")
 #            os._exit(os.EX_OK)
-            if not entry_urls:
+            if not entries:
                 consecutive_empty_pages += 1
                 self.log(f"No entries found on page (empty page {consecutive_empty_pages})")
                 # Stop after 2 consecutive empty pages
@@ -554,18 +848,21 @@ class DreamwidthScraper:
             page_new_count = 0
             page_dates = []  # Track dates on this page
 
-            self.log(f"\n--- Processing page with skip={skip} ({len(entry_urls)} entries) ---")
+            self.log(f"\n--- Processing page with skip={skip} ({len(entries)} entries) ---")
 
             # Scrape each entry
-            for entry_url in entry_urls:
+            for entry_meta in entries:
+                entry_url = entry_meta['url']
+                entry_title_from_listing = entry_meta['title']
+                entry_date_from_listing = entry_meta['date']
+
                 itemid = self.extract_itemid_from_url(entry_url)
 
                 # Skip if we already have this entry
                 if itemid and self.entry_exists(itemid):
                     page_existing_count += 1
                     skipped_count += 1
-                    self.log(f"SKIP {itemid}  - already exists")
-#                    self.log(f"SKIP {itemid} [{date_str}] - already exists: {entry_data.get('subject', 'NO TITLE')[:50]}")
+                    self.log(f"SKIP {itemid} [{entry_date_from_listing}] - already exists: {entry_title_from_listing[:50]}")
                     continue
 
                 # Always scrape to get the date, even if we skip storing it
@@ -731,6 +1028,11 @@ def main():
         default=None,
         help='Session cookie value (ljsession=...) from browser for authentication'
     )
+    parser.add_argument(
+        '--use-archive',
+        action='store_true',
+        help='Use archive-based scraping (more reliable, traverses /archive pages)'
+    )
 
     args = parser.parse_args()
 
@@ -811,9 +1113,16 @@ def main():
         print("Authentication: Disabled (public entries only)")
 
     print(f"Note: This tool includes respectful delays between requests")
+    if args.use_archive:
+        print("Mode: Archive-based scraping (traversing /archive pages)")
+    else:
+        print("Mode: Pagination-based scraping (use --use-archive for more reliable scraping)")
     print()
 
-    entries = scraper.scrape_journal(max_entries=args.max)
+    if args.use_archive:
+        entries = scraper.scrape_journal_from_archive(max_entries=args.max)
+    else:
+        entries = scraper.scrape_journal(max_entries=args.max)
 
     print(f"\n{'='*60}")
     print(f"Scraping complete!")

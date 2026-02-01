@@ -116,8 +116,16 @@ Note that you can run the script that generates the HTML by itself, skipping ove
 
 `./ljdumptohtml.py --cache_images`
 
+## Scraping other people's whole blog, via `archive` page
+
+`dwscrape.py --config ./(yourid).config (yourfriendid) --use-archive`
+e.g.
+`dwscrape.py --config ./juan_gandhi.config kdanilov --use-archive`
+
+
 ## Have fun!  ##
 
 You should know that there's no warranty here, and no guarantee that Dreamwidth or Livejournal won't shut off their XML-RPC protocol at some point.  Try not to aggravate them by downloading your journal a thousand times, mmmkay?
 
 A Livejournal [community](https://ljdump.livejournal.com) was set up for questions or comments on the original version of this script back in 2009, but it has not seen attention for years.  Say [hello to me here](https://garote.dreamwidth.org/330489.html) if you have feedback.
+

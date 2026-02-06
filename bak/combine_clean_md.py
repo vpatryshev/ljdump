@@ -10,7 +10,7 @@ import os
 import re
 import sys
 import glob
-from ljdumpops import *
+from utils import *
 
 def clean_markdown_content(content):
     """Clean up markdown content according to specified rules."""
@@ -103,9 +103,9 @@ def combine_markdown_files(config, input_pattern, output_file):
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         fail("Usage: combine_clean_md.py id <input_pattern> <output_file>\n" +
-             "Example: combine_clean_md.py 'JuanEnrique_markdown/*.md' JuanEnrique_combined.md")
+             "Example: combine_clean_md.py juan_gandhi 'JuanEnrique_markdown/*.md' JuanEnrique_combined.md")
     id=sys.argv[1]
     input_pattern = sys.argv[2]
     output_file = sys.argv[3]
-    config = load_config(f"{id}.json"   )
-    combine_markdown_files(config, input_pattern, output_file)
+    configFileData = load_config(f"{id}.json")
+    combine_markdown_files(configFileData, input_pattern, output_file)

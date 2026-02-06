@@ -32,35 +32,8 @@ import urllib
 from xml.sax import saxutils
 from datetime import *
 from ljdumpsqlite import *
+from utils import *
 from ljdumptohtml import ljdumptohtml
-
-
-MimeExtensions = {
-    "image/gif": ".gif",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-}
-
-
-def getljsession(journal_server, username, password):
-    """Log in with password and get session cookie."""
-    d = dict(   mode="sessiongenerate",
-                user=username,
-                auth_method="clear",
-                password=password
-    )
-    data = urllib.parse.urlencode(d).encode("utf-8")
-    r = urllib.request.urlopen(journal_server+"/interface/flat", data=data)
-    response = {}
-    while True:
-        name = r.readline()
-        if len(name) == 0:
-            break
-        value = r.readline()
-        response[name.decode('utf-8').strip()] = value.decode('utf-8').strip()
-    r.close()
-    return response['ljsession']
-
 
 def gettext(e):
     if len(e) == 0:
@@ -86,7 +59,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
     except:
         pass
 
-    ljsession = getljsession(journal_server, username, password)
+    session = startSession(journal_server, username, password)
 
     server = xmlrpc.client.ServerProxy(journal_server+"/interface/xmlrpc")
 
@@ -218,7 +191,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
             r = urllib.request.urlopen(
                     urllib.request.Request(
                         journal_server + url,
-                        headers = {'Cookie': "ljsession="+ljsession}
+                        headers = {'Cookie': "ljsession="+session}
                     )
                 )
             meta = xml.dom.minidom.parse(r)
@@ -278,7 +251,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
                 r = urllib.request.urlopen(
                     urllib.request.Request(
                         journal_server+"/export_comments.bml?get=comment_body&startid=%d&numitems=%d%s" % (commentid, meta_comments_fetched_count, authas),
-                        headers = {'Cookie': "ljsession="+ljsession}
+                        headers = {'Cookie': "ljsession="+session}
                     )
                 )
                 meta = xml.dom.minidom.parse(r)
@@ -460,52 +433,16 @@ if __name__ == "__main__":
     config_file = args.user_name + ".config"
 
     if os.access(config_file, os.F_OK):
-        config = xml.dom.minidom.parse(config_file)
-        journal_server = config.documentElement.getElementsByTagName("server")[0].childNodes[0].data
-        username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
-
-        journals = [e.childNodes[0].data for e in config.documentElement.getElementsByTagName("journal")]
-        if not journals:
-            journals = [username]
-
-        password_els = config.documentElement.getElementsByTagName("password")
-        if len(password_els) > 0:
-            password = password_els[0].childNodes[0].data
-        else:
-            password = getpass("Password: ")
-
-        ljuniq = None
-        # If a user is hosting images on Dreamwidth and using a config file, they will
-        # put their cookie in the config file.  Asking for it every time would annoy users
-        # who are not hosting images on Dreamwidth.
-        if args.cache_images:
-            ljuniq_els = config.documentElement.getElementsByTagName("ljuniq")
-            if len(ljuniq_els) > 0:
-                ljuniq = ljuniq_els[0].childNodes[0].data
+        config = ConfigFromFile(config_file, args)
     else:
-        print("ljdump - livejournal/dreamwidth archiver")
-        print
-        default_server = "https://dreamwidth.org"
-        journal_server = input("Alternative server to use (e.g. 'https://www.livejournal.com'), or hit return for '%s': " % default_server) or default_server
-        print
-        print("Enter your Livejournal (or Dreamwidth, etc) username and password.")
-        print
-        username = input("Username: ")
-        password = getpass("Password: ")
-        ljuniq = None
-        if args.cache_images:
-            ljuniq = getpass("ljuniq cookie (for Dreamwidth hosted image downloads, leave blank otherwise): ")
-        print
-        print("You may back up either your own journal, or a community.")
-        print("If you are a community maintainer, you can back up both entries and comments.")
-        print("If you are not a maintainer, you can back up only entries.")
-        print
-        journal = input("Journal to back up (or hit return to back up '%s'): " % username)
-        print
-        if journal:
-            journals = [journal]
-        else:
-            journals = [username]
+        config = TUIConfig("ljdump", args)
+
+    journal_server = config.server
+    username = config.username
+    journals = config.journals
+    password = config.password
+    ljuniq = config.ljuniq
+#    fail("ENOUGH " + journal_server + "-" + ','.join(journals) + '-' + password)
 
     for journal in journals:
         ljdump(

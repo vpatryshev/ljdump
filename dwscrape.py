@@ -1045,10 +1045,11 @@ def main():
     cookie = args.cookie
 
     if args.config:
-        config = load_config(args.config)
-        if config:
-            username = username or config.get('username')
-            password = password or config.get('password')
+        configFileData = load_config(args.config)
+        fail("ok with " + args.config)
+        if configFileData:
+            username = username or configFileData.get('username')
+            password = password or configFileData.get('password')
             if verbose:
                 print(f"Loaded credentials from {args.config}")
         else:
@@ -1058,10 +1059,10 @@ def main():
     if not username and not password and not cookie:
         default_config = f"{journal_name}.config"
         if os.path.exists(default_config):
-            config = load_config(default_config)
-            if config:
-                username = config.get('username')
-                password = config.get('password')
+            configFileData = load_config(default_config)
+            if configFileData:
+                username = configFileData.get('username')
+                password = configFileData.get('password')
                 if verbose:
                     print(f"Loaded credentials from {default_config}")
 

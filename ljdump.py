@@ -41,21 +41,25 @@ def gettext(e):
     return e[0].firstChild.nodeValue
 
 
-def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
+def ljdump(config, journal, ljuniq=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
+    journal_server = config.server
+    username = config.username
+    password = config.password
+    ljuniq = config.ljuniq
 
     m = re.search("(.*)/interface/xmlrpc", journal_server)
     if m:
         journal_server = m.group(1)
-    if username != journal_short_name:
-        authas = "&authas=%s" % journal_short_name
+    if username != journal:
+        authas = "&authas=%s" % journal
     else:
         authas = ""
 
     if verbose:
-        print("Fetching journal entries for: %s" % journal_short_name)
+        print("Fetching journal entries for: %s" % journal)
     try:
-        os.mkdir(journal_short_name)
-        print("Created subdirectory: %s" % journal_short_name)
+        os.mkdir(journal)
+        print("Created subdirectory: %s" % journal)
     except:
         pass
 
@@ -75,7 +79,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
     cur = None
 
     # create a database connection
-    conn = connect_to_local_journal_db("%s/journal.db" % journal_short_name, verbose)
+    conn = connect_to_local_journal_db("%s/journal.db" % journal, verbose)
     if not conn:
         fail("failed to connect to db")
 
@@ -117,7 +121,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
     r = server.LJ.XMLRPC.syncitems(authed({
         'ver': 1,
         'lastsync': sync_status['last_sync'],
-        'usejournal': journal_short_name,
+        'usejournal': journal,
     }))
 
     if verbose:
@@ -132,7 +136,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
                     'ver': 1,
                     'selecttype': "one",
                     'itemid': item['item'][2:],
-                    'usejournal': journal_short_name,
+                    'usejournal': journal,
                 }))
                 if e['events']:
                     ev = e['events'][0]
@@ -173,10 +177,10 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
     max_comment_id = sync_status['last_max_comment_id']
 
     if verbose:
-        print("Fetching journal comment metadata for \"%s\" starting at ID %d" % (journal_short_name, max_comment_id))
+        print("Fetching journal comment metadata for \"%s\" starting at ID %d" % (journal, max_comment_id))
 
     try:
-        f = open("%s/comment.meta" % journal_short_name)
+        f = open("%s/comment.meta" % journal)
         metacache = pickle.load(f)
         f.close()
     except:
@@ -357,20 +361,20 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
         userpics['*'] = r['defaultpicurl']
 
     insert_or_update_user_info(cur, verbose,
-        {   'journal_short_name': journal_short_name,
+        {   'journal_short_name': journal,
             'defaultpicurl': possible_unicode_or_none(r['defaultpicurl']),
             'fullname': possible_unicode_or_none(r['fullname']),
             'userid': r['userid']
         })
 
-    if username == journal_short_name:
+    if username == journal:
         try:
-            os.mkdir("%s/userpics" % (journal_short_name))
+            os.mkdir("%s/userpics" % (journal))
         except OSError as e:
             if e.errno == 17:   # Folder already exists
                 pass
         if verbose:
-            print("Fetching userpics for: %s" % journal_short_name)
+            print("Fetching userpics for: %s" % journal)
 
         for p in userpics:
             if p is not None:
@@ -379,11 +383,11 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
                 picfn = re.sub(r'[*?\\/:<> "|]', "_", p)
                 try:
                     picfn = codecs.utf_8_decode(picfn)[0]
-                    picf = open("%s/userpics/%s%s" % (journal_short_name, picfn, ext), "wb")
+                    picf = open("%s/userpics/%s%s" % (journal, picfn, ext), "wb")
                 except:
                     # for installations where the above utf_8_decode doesn't work
                     picfn = "".join([ord(x) < 128 and x or "_" for x in picfn])
-                    picf = open("%s/userpics/%s%s" % (journal_short_name, picfn, ext), "wb")
+                    picf = open("%s/userpics/%s%s" % (journal, picfn, ext), "wb")
                 shutil.copyfileobj(pic, picf)
                 pic.close()
                 picf.close()
@@ -410,7 +414,7 @@ def ljdump(journal_server, username, password, journal_short_name, ljuniq=None, 
         ljdumptohtml(
             username=username,
             ljuniq=ljuniq,
-            journal_short_name=journal_short_name,
+            journal=journal,
             verbose=verbose,
             cache_images=cache_images,
             retry_images=retry_images
@@ -446,11 +450,8 @@ if __name__ == "__main__":
 
     for journal in journals:
         ljdump(
-            journal_server=journal_server,
-            username=username,
-            password=password,
-            ljuniq=ljuniq,
-            journal_short_name=journal,
+            config,
+            journal,
             verbose=args.verbose,
             max_to_fetch=args.max_to_fetch,
             make_pages=args.make_pages,

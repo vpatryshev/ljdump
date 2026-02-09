@@ -37,6 +37,7 @@ from xml.etree import ElementTree as ET
 from ljdumpsqlite import *
 import time
 from utils import *
+from config import *
 
 MimeExtensions = {
     "image/gif": ".gif",
@@ -678,13 +679,13 @@ def create_uncached_images_report_page(journal, entries):
     return html_as_string
 
 
-def download_entry_image(img_url, journal, subfolder, image_id, entry_url, ljuniq):
+def download_entry_image(img_url, journal, subfolder, image_id, entry_url, unique):
     try:
         headers = {}
         # A URL is not mandatory in the journal data, so we need to check that.
-        if (entry_url is not None) and (ljuniq is not None):
+        if (entry_url is not None) and (unique is not None):
             # Only necessary for Dreamwidth-hosted images, but does no harm generally.
-            headers = {'Referer': entry_url, 'Cookie': "ljuniq="+ljuniq}
+            headers = {'Referer': entry_url, 'Cookie': "unique="+unique}
 
         image_req = urllib.request.urlopen(urllib.request.Request(img_url, headers = headers), timeout = 4)
         if image_req.headers.get_content_maintype() != 'image':
@@ -736,7 +737,11 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, ljuni
         return (1, None)
 
 
-def ljdumptohtml(username, journal, ljuniq=None, verbose=True, cache_images=True, retry_images=True):
+def ljdumptohtml(
+    config, journal, cache_images=True, retry_images=True):
+    username=config.username,
+    unique=config.unique,
+    verbose=config.verbose,
     if verbose:
         print("Starting conversion for: %s" % journal)
 
@@ -819,7 +824,7 @@ def ljdumptohtml(username, journal, ljuniq=None, verbose=True, cache_images=True
                         image_id = cached_image['id']
                         cache_result = 0
                         img_filename = None
-                        (cache_result, img_filename) = download_entry_image(url_to_cache, journal, subfolder, image_id, entry['url'], ljuniq)
+                        (cache_result, img_filename) = download_entry_image(url_to_cache, journal, subfolder, image_id, entry['url'], unique)
                         if (cache_result == 0) and (img_filename is not None):
                             report_image_as_cached(cur, verbose, image_id, img_filename, entry_date)
                             image_resolve_max -= 1
@@ -1040,20 +1045,13 @@ if __name__ == "__main__":
     args.add_argument("--dont_retry_images", "-d", action='store_false', dest='retry_images',
                       help="don't retry images that failed to cache once already")
     args = args.parse_args()
-    if os.access("ljdump.config", os.F_OK):
-        config = ConfigFromFile("ljdump.config")
-        username = fileConfig.username
-        journals = fileConfig.journals
-        ljuniq = fileConfig.ljuniq
-    else:
-        config = TUIConfig("ljdumptohtml", args)
 
-    for journal in journals:
+    config = setup("ljdump.config", args)
+
+    for journal in config.journals:
         ljdumptohtml(
-            username=config.username,
-            ljuniq=config.ljuniq,
+            config,
             journal=journal,
-            verbose=config.verbose,
             cache_images=args.cache_images,
             retry_images=args.retry_images
         )

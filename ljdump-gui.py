@@ -52,7 +52,9 @@ def do_ok(event = None):
     ok['state'] = DISABLED
     cancel['state'] = DISABLED
     global gWorkerThread
-    gWorkerThread = threading.Thread(None, ljdump.ljdump, args=("https://livejournal.com", username.get(), password.get(), journal.get()))
+    user = username.get()
+    config = Config("https://livejournal.com", user, password.get(), [username], None, args)
+    gWorkerThread = threading.Thread(None, ljdump.ljdump, args=(config, username))
     gWorkerThread.start()
     poll()
 

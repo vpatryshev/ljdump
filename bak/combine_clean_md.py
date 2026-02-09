@@ -11,6 +11,7 @@ import re
 import sys
 import glob
 from utils import *
+from config import *
 
 def clean_markdown_content(content):
     """Clean up markdown content according to specified rules."""

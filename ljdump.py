@@ -32,6 +32,7 @@ import urllib
 from xml.sax import saxutils
 from datetime import *
 from ljdumpsqlite import *
+from config import *
 from utils import *
 from ljdumptohtml import ljdumptohtml
 
@@ -41,11 +42,11 @@ def gettext(e):
     return e[0].firstChild.nodeValue
 
 
-def ljdump(config, journal, ljuniq=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
+def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
     journal_server = config.server
     username = config.username
     password = config.password
-    ljuniq = config.ljuniq
+    unique = config.unique
 
     m = re.search("(.*)/interface/xmlrpc", journal_server)
     if m:
@@ -412,10 +413,8 @@ def ljdump(config, journal, ljuniq=None, verbose=True, max_to_fetch=100, make_pa
 
     if make_pages:
         ljdumptohtml(
-            username=username,
-            ljuniq=ljuniq,
+            config,
             journal=journal,
-            verbose=verbose,
             cache_images=cache_images,
             retry_images=retry_images
         )
@@ -434,21 +433,10 @@ if __name__ == "__main__":
                       help="don't retry images that failed to cache once already")
     args.add_argument("--user", type=str, default='ljdump', dest='user_name', help="Name of config file dot config")
     args = args.parse_args()
-    config_file = args.user_name + ".config"
 
-    if os.access(config_file, os.F_OK):
-        config = ConfigFromFile(config_file, args)
-    else:
-        config = TUIConfig("ljdump", args)
+    config = setup(args.user_name + ".config", args)
 
-    journal_server = config.server
-    username = config.username
-    journals = config.journals
-    password = config.password
-    ljuniq = config.ljuniq
-#    fail("ENOUGH " + journal_server + "-" + ','.join(journals) + '-' + password)
-
-    for journal in journals:
+    for journal in config.journals:
         ljdump(
             config,
             journal,

@@ -434,18 +434,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Determine journal name
-    journal_name = None
-    if args.journal:
-        journal_name = args.journal
-    elif os.access("ljdump.config", os.F_OK):
-        config = xml.dom.minidom.parse("ljdump.config")
-        username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
-        journals = [e.childNodes[0].data for e in config.documentElement.getElementsByTagName("journal")]
-        if not journals:
-            journal_name = username
-        else:
-            journal_name = journals[0]
+    config = setup("ljdump.config", args)
+
     else:
         print("Error: No journal specified and no ljdump.config found")
         print("Usage: ljdumptomd.py [--tags TAGS] [--dates DATERANGE] [journal_name]")

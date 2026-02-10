@@ -37,66 +37,68 @@ from config import *
 import json
 import time
 
-
 class Config:
-
-    def __init__(self, server, username, password, journals, unique, args):
-        self.server = server
-        self.username = username
-        self.password = password
-        self.journals = journals
-        self.unique = unique
+    def __init__(self, args):
         self.verbose = not hasattr(args, 'quiet')
         if args.cache_images:
             self.unique = getpass("unique cookie (for Dreamwidth hosted image downloads, leave blank otherwise): ")
         self.cache_images=args.cache_images,
         self.retry_images=args.retry_images
 
+class ConfigPlain(Config):
+
+    def __init__(self, server, username, password, journals, unique, args):
+        super().__init__(args)
+        self.server = server
+        self.username = username
+        self.password = password
+        self.journals = journals
+        self.unique = unique
+
 class TUIConfig(Config):
     def __init__(self, name, args):
+        super().__init__(args)
         print("{name} - livejournal (or Dreamwidth, etc) archive to html utility")
         print
         default_server = "https://livejournal.com"
-        server = raw_input("Alternative server to use (e.g. 'https://www.dreamwidth.org'), or hit return for '%s': " % default_server) or default_server
+        self.server = raw_input("Alternative server to use (e.g. 'https://www.dreamwidth.org'), or hit return for '%s': " % default_server) or default_server
         print
         print("Enter your Livejournal (or Dreamwidth, etc) username.")
         print
-        username = raw_input("Username: ")
+        self.username = raw_input("Username: ")
         print
         journal = raw_input("Journal to render (or hit return to render '%s'): " % username)
         password = getpass("Password: ")
         print
         if journal:
-            journals = [journal]
+            self.journals = [journal]
         else:
-            journals = [username]
-        unique = None
+            self.journals = [username]
+        self.unique = None
         print
-        super().__init__(server, username, password, journals, unique, args)
 
 class ConfigFromFile(Config):
     def __init__(self, path, args, cache_images = False):
-        """Load configuration from XML file."""
+        super().__init__(args)
         if os.path.exists(path):
             config = xml.dom.minidom.parse(path)
-            server = config.documentElement.getElementsByTagName("server")[0].childNodes[0].data
-            username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
-            journals = [e.childNodes[0].data for e in config.documentElement.getElementsByTagName("journal")]
-            if not journals:
-                journals = [username]
+            self.server = config.documentElement.getElementsByTagName("server")[0].childNodes[0].data
+            self.username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
+            self.journals = [e.childNodes[0].data for e in config.documentElement.getElementsByTagName("journal")]
+            if not self.journals:
+                self.journals = [self.username]
 
             password_els = config.documentElement.getElementsByTagName("password")
-            password = password_els[0].childNodes[0].data
+            self.password = password_els[0].childNodes[0].data
 
             # If a user is hosting images on Dreamwidth and using a config file, they will
             # put their cookie in the config file.  Asking for it every time would annoy users
             # who are not hosting images on Dreamwidth.
-            unique = None
-            if cache_images:
+            self.unique = None
+            if self.cache_images:
                 unique_els = config.documentElement.getElementsByTagName("unique")
                 if len(unique_els) > 0:
-                    unique = unique_els[0].childNodes[0].data
-            super().__init__(server, username, password, journals, unique, args)
+                    self.unique = unique_els[0].childNodes[0].data
         else:
             fail("\n".join(
                 [f"Could not open {path}",

@@ -36,6 +36,8 @@ from ljdumpsqlite import (
     create_tables_if_missing,
     finish_with_database
 )
+from config import *
+from utils import *
 
 # Be respectful - delay between requests
 REQUEST_DELAY = 2.0  # seconds
@@ -1046,7 +1048,6 @@ def main():
 
     if args.config:
         configFileData = load_config(args.config)
-        fail("ok with " + args.config)
         if configFileData:
             username = username or configFileData.get('username')
             password = password or configFileData.get('password')
@@ -1054,6 +1055,8 @@ def main():
                 print(f"Loaded credentials from {args.config}")
         else:
             print(f"Warning: Could not load config from {args.config}")
+
+    fail("ok with " + args.config)
 
     # Try default config file if no credentials provided and no cookie
     if not username and not password and not cookie:

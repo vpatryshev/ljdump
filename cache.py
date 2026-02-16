@@ -23,59 +23,60 @@
 #    misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
 #
-# Copyright (c) 2026-2024 Vlad Patryshev and contributors
+# Copyright (c) 2026-2038 Vlad Patryshev and contributors
 
-import argparse, codecs, os, pickle, pprint, re, shutil, sys
+import os, time
 from pathlib import Path
-from datetime import *
-from utils import *
 
 DIR="cache"
 CACHEPATH = Path(DIR)
-TTL=12*3600 # seconds, that is, 12 hours
+TTL=12*3600 # 12 hours
 
 if not os.path.exists(DIR):
     os.mkdir(DIR)
 
-def path(name):
-    return os.path.join(DIR, name)
 
-def clear(name):
-    p = path(name)
-    if os.path.exists(p):
-        os.remove(p)
+def path(key: str) -> Path:
+    return CACHEPATH / key
+
+
+def clear(key: str):
+    p = path(key)
+    if p.exists():
+        p.unlink()
+
 
 def clearAll():
-    for item in CACHEPATH.iterdir():
-        item.unlink()
+    for p in list(CACHEPATH.iterdir()): p.unlink()
 
-def isFresh(name):
-    p = path(name)
-    if os.path.exists(p):
-        age_seconds = time.time() - os.path.getmtime(p)
-        return age_seconds < TTL
+
+def isFresh(key: str) -> bool:
+    p = path(key)
+    if p.exists():
+        return time.time() < p.stat().st_mtime + TTL
     else:
-        return FALSE
+        return False
 
-def get(name):
-    p = path(name)
-    if isFresh(name):
-        with open(p, 'r', encoding='utf-8') as f:
-            content = f.read()
-            f.close()
-            return content
-    else:
-        None
 
-def put(name, value):
-    p = path(name)
-    with open(p, 'w', encoding='utf-8') as f:
-        f.write(value)
-        f.close()
+def get(key: str) -> str:
+    if isFresh(key): return path(key).read_text(encoding='utf-8')
+
+
+def put(key: str, value: str):
+    path(key).write_text(value)
+
+
+def getOrCall(key: str, fun):
+    value = get(key)
+    if value == None:
+        value = fun(key)
+        put(key, value)
+    return value
+
 
 if __name__ == "__main__":
 # test the cache
-    TTL = 3
+    TTL = 1
     print("TESTING cache.py")
     clearAll()
     clear("non existent file")
@@ -89,23 +90,19 @@ if __name__ == "__main__":
     put("test2", "this file gets expired soon")
     fromfile2a = get("test2")
     assert fromfile2a == "this file gets expired soon", "Oops, bad file test2"
-    time.sleep(5)
+    time.sleep(2)
     fromfile2b = get("test2")
     assert fromfile2b == None, "Oops, test2 still available?!"
 
+    value1 = getOrCall("test3", lambda key: f"<<{key}-1>>")
+    assert value1 == "<<test3-1>>", "first call of test3, got {value1}"
+    value2 = getOrCall("test3", lambda key: f"<<{key}-1>>")
+    assert value2 == "<<test3-1>>", f"second call of test3, got {value2}"
+    time.sleep(2)
+    value3 = getOrCall("test3", lambda key: f"<<{key}-3>>")
+    assert value3 == "<<test3-3>>", "third call of test3, got {value3}"
+
+    put("url/", "somedata")
+    fromfile4 = get("url/")
+    assert fromfile4 == "somedata", "problem with url/"
     print("DONE TESTING cache.py")
-
-
-#     args = argparse.ArgumentParser(description="Livejournal archive utility")
-#     args.add_argument("--quiet", "-q", action='store_false', dest='verbose',
-#                       help="reduce log output")
-#     args.add_argument("--no_html", "-n", action='store_false', dest='make_pages',
-#                       help="don't process the journal data into HTML files.")
-#     args.add_argument('--max', type=int, default=400, dest='max_to_fetch',
-#                       help='Maximum number of entries and comments to fetch at a time.  Default is 400.')
-#     args.add_argument("--cache_images", "-i", action='store_true', dest='cache_images',
-#                       help="build a cache of images referenced in entries")
-#     args.add_argument("--dont_retry_images", "-d", action='store_false', dest='retry_images',
-#                       help="don't retry images that failed to cache once already")
-#     args.add_argument("--user", type=str, default='ljdump', dest='user_name', help="Name of config file dot config")
-#     args = args.parse_args()

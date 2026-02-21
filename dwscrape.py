@@ -206,12 +206,13 @@ class DreamwidthHTMLParser(HTMLParser):
 class DreamwidthScraper:
     """Scrapes Dreamwidth journal entries (public and friends-only if authenticated)."""
 
-    def __init__(self, journal_name, verbose=True, username=None, password=None, db_path=None):
+    def __init__(self, journal_name, verbose=True, username=None, password=None, db_path=None, api_key=None):
         self.journal_name = journal_name
         self.base_url = f"https://{journal_name}.dreamwidth.org"
         self.verbose = verbose
         self.username = username
         self.password = password
+        self.api_key = api_key
         self.db_path = db_path
 
         # Set up cookie jar and opener for authenticated requests
@@ -273,92 +274,72 @@ class DreamwidthScraper:
 
         Returns True if login successful, False otherwise.
         """
+        # If API key is provided, use Bearer token authentication
+        if self.api_key:
+            self.log("Using API key for Bearer token authentication")
+            self.authenticated = True
+            return True
+
         if not self.username or not self.password:
             self.log("No credentials provided, scraping without authentication")
             return False
 
-        self.log(f"Logging in as {self.username} via API...")
-
-        # Use Dreamwidth's flat interface API for session generation
-        login_url = "https://www.dreamwidth.org/interface/flat"
-
-        # Login form data for sessiongenerate mode
-        login_data = {
-            'mode': 'sessiongenerate',
-            'user': self.username,
-            'auth_method': 'clear',
-            'password': self.password
-        }
+        self.log(f"Logging in as {self.username} via web login...")
 
         try:
-            data = urlencode(login_data).encode('utf-8')
-            req = Request(login_url, data=data, headers={'User-Agent': USER_AGENT})
+            # Step 1: Get the login page to extract lj_form_auth token
+            login_page_url = "https://www.dreamwidth.org/login"
+            req = Request(login_page_url, headers={'User-Agent': USER_AGENT})
 
-            # Use opener to capture any cookies
             with self.opener.open(req, timeout=30) as response:
-                # Parse the flat interface response
-                response_data = {}
-                for line in response:
-                    line = line.decode('utf-8').strip()
-                    if not line:
+                login_html = response.read().decode('utf-8')
+
+                # Extract lj_form_auth token
+                auth_match = re.search(r'name=["\']lj_form_auth["\'] value=["\']([^"\']+)["\']', login_html)
+                lj_form_auth = auth_match.group(1) if auth_match else None
+
+                if lj_form_auth:
+                    self.log(f"Found CSRF token")
+
+            # Step 2: POST login credentials
+            login_data = {
+                'user': self.username,
+                'password': self.password,
+                'action:login': 'Log in',
+                'remember_me': '1'
+            }
+
+            if lj_form_auth:
+                login_data['lj_form_auth'] = lj_form_auth
+
+            encoded_data = urlencode(login_data).encode('utf-8')
+            req2 = Request(login_page_url, data=encoded_data, headers={'User-Agent': USER_AGENT})
+
+            with self.opener.open(req2, timeout=30) as response2:
+                # Check if login was successful by looking for session cookies
+                has_session = False
+                for cookie in self.cookie_jar:
+                    if cookie.name == 'ljmastersession':
+                        has_session = True
+                        self.ljsession = cookie.value
+                        self.log(f"✓ Got ljmastersession cookie")
                         break
-                    key = line
-                    value_line = next(response, b'')
-                    value = value_line.decode('utf-8').strip()
-                    response_data[key] = value
 
-                # Check if we got a session
-                if 'ljsession' in response_data:
-                    ljsession = response_data['ljsession']
-                    self.ljsession = ljsession
-
-                    # Create cookies for all domain variants
-                    domains_to_try = [
-                        '.dreamwidth.org',
-                        'dreamwidth.org',
-                        'www.dreamwidth.org',
-                        f'{self.journal_name}.dreamwidth.org'
-                    ]
-
-                    for domain in domains_to_try:
-                        cookie = Cookie(
-                            version=0,
-                            name='ljsession',
-                            value=ljsession,
-                            port=None,
-                            port_specified=False,
-                            domain=domain,
-                            domain_specified=True,
-                            domain_initial_dot=domain.startswith('.'),
-                            path='/',
-                            path_specified=True,
-                            secure=False,
-                            expires=None,
-                            discard=True,
-                            comment=None,
-                            comment_url=None,
-                            rest={},
-                            rfc2109=False
-                        )
-                        self.cookie_jar.set_cookie(cookie)
-
+                if has_session:
                     self.authenticated = True
-                    self.log("API login successful!")
-                    self.log(f"Session: ljsession={ljsession[:20]}...{ljsession[-20:]}")
+                    self.log("Web login successful!")
 
-                    # Show all cookies in jar
+                    # Show all cookies
                     all_cookies = [(c.name, c.domain) for c in self.cookie_jar]
-                    self.log(f"Cookies in jar: {all_cookies}")
+                    self.log(f"Cookies: {', '.join([c[0] for c in all_cookies])}")
 
                     return True
                 else:
-                    self.log("API login failed - no session returned")
-                    if 'errmsg' in response_data:
-                        self.log(f"Error: {response_data['errmsg']}")
+                    self.log("✗ Web login failed - no session cookie received")
                     return False
 
         except Exception as e:
-            self.log(f"API login error: {e}")
+            self.log(f"Web login error: {e}")
             return False
 
     def fetch_page(self, url, delay=True):
@@ -371,6 +352,10 @@ class DreamwidthScraper:
 
         try:
             headers = {'User-Agent': USER_AGENT}
+
+            # If using API key, add Bearer token authorization
+            if self.api_key:
+                headers['Authorization'] = f'Bearer {self.api_key}'
 
             # If authenticated, use the opener with cookie jar (automatic cookie handling)
             # Don't manually add cookies - let the opener handle it
@@ -426,6 +411,7 @@ class DreamwidthScraper:
 
         # Try different date formats
         formats = [
+            "%Y-%m-%d %H:%M",       # 2022-04-26 20:21 (from month pages)
             "%b. %d, %Y %I:%M %p",  # Nov. 29, 2022 05:58 am
             "%B. %d, %Y %I:%M %p",  # November. 29, 2022 05:58 am
             "%b %d, %Y %I:%M %p",   # Nov 29, 2022 05:58 am
@@ -719,8 +705,35 @@ class DreamwidthScraper:
         self.log(f"  Found {len(entries)} entries in {month_url}")
         return entries
 
+    def scrape_year_page_months(self, year_url):
+        """Extract month archive links from a year page.
+
+        Args:
+            year_url: URL like 'https://kdanilov.dreamwidth.org/2017/'
+
+        Returns:
+            List of month URLs (e.g., ['https://kdanilov.dreamwidth.org/2017/06/', ...])
+        """
+        html = self.fetch_page(year_url, delay=True)
+        if not html:
+            return []
+
+        # Extract month links: https://kdanilov.dreamwidth.org/2017/06/
+        month_pattern = r'href="(https?://[^/]+/\d{4}/\d{2}/)"'
+        month_urls = re.findall(month_pattern, html)
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_urls = []
+        for url in month_urls:
+            if url not in seen:
+                seen.add(url)
+                unique_urls.append(url)
+
+        return unique_urls
+
     def scrape_journal_from_archive(self, max_entries=None):
-        """Scrape journal using archive pages (more reliable than pagination).
+        """Scrape journal by extracting entry URLs directly from year pages.
 
         Args:
             max_entries: Maximum number of entries to scrape (None for all)
@@ -728,74 +741,126 @@ class DreamwidthScraper:
         Returns:
             List of entry data dictionaries
         """
-        # Login first if credentials are provided
-        if self.username and self.password:
+        # Login first if credentials or API key are provided
+        if self.api_key or (self.username and self.password):
             self.login()
 
         # Load existing entries from database
         self.load_existing_itemids()
 
-        # Get all month archive URLs
-        month_urls = self.scrape_archive_page()
-        if not month_urls:
-            self.log("No archive pages found")
+        # Get year URLs from archive page
+        archive_url = f"{self.base_url}/archive"
+        self.log(f"Fetching archive page: {archive_url}")
+        html = self.fetch_page(archive_url)
+        if not html:
+            self.log("Failed to fetch archive page")
             return []
 
+        # Extract year links
+        year_pattern = r'href="(https?://[^/]+/\d{4}/)(?:"|\?)'
+        year_matches = re.findall(year_pattern, html)
+        year_urls = []
+        for match in year_matches:
+            if re.match(r'.*/\d{4}/$', match) and match not in year_urls:
+                year_urls.append(match)
+
+        year_urls.sort(reverse=True)  # Newest first
+        self.log(f"Found {len(year_urls)} year archives")
+
+        if not year_urls:
+            self.log("No year archives found")
+            return []
+
+        # Collect all month URLs from all year pages
+        self.log(f"\n=== Collecting month URLs from {len(year_urls)} year pages ===")
+        all_month_urls = []
+        seen_months = set()
+
+        for year_idx, year_url in enumerate(year_urls, 1):
+            self.log(f"[{year_idx}/{len(year_urls)}] {year_url}")
+            month_urls = self.scrape_year_page_months(year_url)
+
+            for url in month_urls:
+                if url not in seen_months:
+                    seen_months.add(url)
+                    all_month_urls.append(url)
+
+            self.log(f"  → Found {len(month_urls)} months")
+
+        self.log(f"\n✓ Collected {len(all_month_urls)} month archives")
+
+        # Collect all entry URLs from all month pages (WITH dates)
+        self.log(f"\n=== Collecting entry URLs from {len(all_month_urls)} month pages ===")
+        all_entry_metadata = []  # Changed: store full metadata, not just URLs
+        seen_entry_urls = set()
+
+        for month_idx, month_url in enumerate(all_month_urls, 1):
+            self.log(f"[{month_idx}/{len(all_month_urls)}] {month_url}")
+            entries = self.scrape_month_page(month_url)
+
+            for entry in entries:
+                url = entry['url']
+                if url not in seen_entry_urls:
+                    seen_entry_urls.add(url)
+                    all_entry_metadata.append(entry)  # Changed: keep full metadata
+
+            self.log(f"  → Found {len(entries)} entries (total: {len(all_entry_metadata)} unique)")
+
+        self.log(f"\n✓ Collected {len(all_entry_metadata)} unique entry URLs")
+
+        # Process all entries
+        self.log(f"\n=== Processing {len(all_entry_metadata)} entries ===")
         all_entries = []
         new_entries_count = 0
         skipped_count = 0
 
-        # Process each month
-        for month_idx, month_url in enumerate(month_urls, 1):
-            self.log(f"\n=== Processing archive {month_idx}/{len(month_urls)}: {month_url} ===")
+        for entry_idx, entry_meta in enumerate(all_entry_metadata, 1):
+            entry_url = entry_meta['url']
+            month_page_date = entry_meta.get('date')  # Date from month page
+            month_page_title = entry_meta.get('title')  # Title from month page
 
-            # Get all entry URLs from this month
-            entries = self.scrape_month_page(month_url)
+            itemid = self.extract_itemid_from_url(entry_url)
 
-            if not entries:
-                self.log(f"  No entries found in this month, moving to next archive")
+            # Skip if we already have this entry
+            if itemid and self.entry_exists(itemid):
+                skipped_count += 1
+                self.log(f"[{entry_idx}/{len(all_entry_metadata)}] SKIP {itemid} - already exists")
                 continue
 
-            self.log(f"  Processing {len(entries)} entries from this month...")
+            # Scrape the full entry
+            self.log(f"[{entry_idx}/{len(all_entry_metadata)}] Fetching {itemid}")
+            entry_data = self.scrape_entry(entry_url)
+            if not entry_data:
+                self.log(f"[{entry_idx}/{len(all_entry_metadata)}] ✗ Failed to scrape entry {itemid}")
+                continue
 
-            # Scrape each entry
-            for entry_idx, entry_meta in enumerate(entries, 1):
-                entry_url = entry_meta['url']
-                entry_title_from_listing = entry_meta['title']
-                entry_date_from_listing = entry_meta['date']
+            # Use month page date as fallback if entry page didn't have a date
+            if not entry_data.get('eventtime') and month_page_date:
+                dt = self.parse_date(month_page_date)
+                if dt:
+                    entry_data['eventtime'] = dt
+                    entry_data['eventtime_unix'] = dt.timestamp()
+                    self.log(f"  Using date from month page: {month_page_date}")
 
-                itemid = self.extract_itemid_from_url(entry_url)
+            # Use month page title as fallback if entry page didn't have a title
+            if not entry_data.get('subject') and month_page_title:
+                entry_data['subject'] = month_page_title
 
-                # Skip if we already have this entry
-                if itemid and self.entry_exists(itemid):
-                    skipped_count += 1
-                    self.log(f"  [{entry_idx}/{len(entries)}] SKIP {itemid} [{entry_date_from_listing}] - already exists: {entry_title_from_listing[:50]}")
-                    continue
+            # Format date for logging
+            date_str = "NO DATE"
+            if entry_data.get('eventtime'):
+                date_str = entry_data['eventtime'].strftime('%Y-%m-%d %H:%M')
 
-                # Scrape the full entry
-                self.log(f"  [{entry_idx}/{len(entries)}] Fetching entry {itemid}: {entry_title_from_listing[:50]}")
-                entry_data = self.scrape_entry(entry_url)
-                if not entry_data:
-                    self.log(f"  [{entry_idx}/{len(entries)}] ✗ Failed to scrape entry {itemid}")
-                    continue
+            # This is a new entry
+            all_entries.append(entry_data)
+            new_entries_count += 1
+            self.existing_itemids.add(entry_data['itemid'])
+            self.log(f"[{entry_idx}/{len(all_entry_metadata)}] ✓ NEW {itemid} [{date_str}] - {entry_data.get('subject', 'NO TITLE')[:50]}")
 
-                # Format date for logging
-                date_str = "NO DATE"
-                if entry_data.get('eventtime'):
-                    date_str = entry_data['eventtime'].strftime('%Y-%m-%d %H:%M')
-
-                # This is a new entry
-                all_entries.append(entry_data)
-                new_entries_count += 1
-                self.existing_itemids.add(entry_data['itemid'])  # Add to cache
-                self.log(f"  [{entry_idx}/{len(entries)}] ✓ NEW  {itemid} [{date_str}] - {entry_data.get('subject', 'NO TITLE')[:50]}")
-
-                if max_entries and new_entries_count >= max_entries:
-                    self.log(f"\n!!! Reached max_entries limit: {max_entries}")
-                    self.log(f"Total: {new_entries_count} new, {skipped_count} skipped")
-                    return all_entries
-
-            self.log(f"  Month complete: {new_entries_count} total new, {skipped_count} total skipped so far")
+            if max_entries and new_entries_count >= max_entries:
+                self.log(f"\n!!! Reached max_entries limit: {max_entries}")
+                self.log(f"Total: {new_entries_count} new, {skipped_count} skipped")
+                return all_entries
 
         self.log(f"\n=== Archive scraping complete ===")
         self.log(f"Total: {new_entries_count} new entries, {skipped_count} skipped")
@@ -810,8 +875,8 @@ class DreamwidthScraper:
         Returns:
             List of entry data dictionaries
         """
-        # Login first if credentials are provided
-        if self.username and self.password:
+        # Login first if credentials or API key are provided
+        if self.api_key or (self.username and self.password):
             self.login()
 
         # Load existing entries from database
@@ -831,7 +896,6 @@ class DreamwidthScraper:
             entries = self.scrape_journal_page(skip)
             if self.verbose:
                 self.log(f"Found these entries: {[e['url'] for e in entries]}")
-#            os._exit(os.EX_OK)
             if not entries:
                 consecutive_empty_pages += 1
                 self.log(f"No entries found on page (empty page {consecutive_empty_pages})")
@@ -1031,6 +1095,11 @@ def main():
         help='Session cookie value (ljsession=...) from browser for authentication'
     )
     parser.add_argument(
+        '--api-key',
+        default=None,
+        help='Dreamwidth API key for Bearer token authentication (get from Manage Accounts → Mobile → Advanced Options)'
+    )
+    parser.add_argument(
         '--use-archive',
         action='store_true',
         help='Use archive-based scraping (more reliable, traverses /archive pages)'
@@ -1045,6 +1114,7 @@ def main():
     username = args.username
     password = args.password
     cookie = args.cookie
+    api_key = args.api_key
 
     if args.config:
         configFileData = load_config(args.config)
@@ -1056,10 +1126,8 @@ def main():
         else:
             print(f"Warning: Could not load config from {args.config}")
 
-    fail("ok with " + args.config)
-
-    # Try default config file if no credentials provided and no cookie
-    if not username and not password and not cookie:
+    # Try default config file if no credentials provided and no cookie/api_key
+    if not username and not password and not cookie and not api_key:
         default_config = f"{journal_name}.config"
         if os.path.exists(default_config):
             configFileData = load_config(default_config)
@@ -1083,14 +1151,20 @@ def main():
         verbose=verbose,
         username=username,
         password=password,
-        db_path=db_path
+        db_path=db_path,
+        api_key=api_key
     )
 
     print(f"Scraping journal: {journal_name}")
     print(f"Database: {db_path}")
 
+    # Handle API key authentication (preferred method)
+    if api_key:
+        print(f"Authentication: API key (Bearer token)")
+        print("  → Using modern Dreamwidth API with Bearer token")
+        print("  → Will access friends-only entries if API key is valid")
     # Handle cookie-based authentication
-    if cookie:
+    elif cookie:
         # Set the cookie directly without login
         scraper.ljsession = cookie
         scraper.authenticated = True

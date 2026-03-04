@@ -433,8 +433,8 @@ if __name__ == "__main__":
                       help="don't retry images that failed to cache once already")
     args.add_argument("--user", type=str, default='ljdump', dest='user_name', help="Name of config file dot config")
     args = args.parse_args()
-
-    config = setup(args.user_name + ".config", args)
+    configPath = args.user_name + ".config"
+    config = setup(configPath, args)
 
     for journal in config.journals:
         ljdump(

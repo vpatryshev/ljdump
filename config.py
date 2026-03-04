@@ -61,7 +61,8 @@ class TUIConfig(Config):
         print("{name} - livejournal (or Dreamwidth, etc) archive to html utility")
         print
         default_server = "https://livejournal.com"
-        self.server = raw_input("Alternative server to use (e.g. 'https://www.dreamwidth.org'), or hit return for '%s': " % default_server) or default_server
+        self.server = input(
+            f"Alternative server to use (e.g. 'https://www.dreamwidth.org'), or hit return for '{default_server}': ") or default_server
         print
         print("Enter your Livejournal (or Dreamwidth, etc) username.")
         print
@@ -105,6 +106,7 @@ class ConfigFromFile(Config):
                 "need an xml config file, see as an example ljdump.config.sample"]))
 
 def setup(config_file, args):
+
   if os.access(config_file, os.F_OK):
       return ConfigFromFile(config_file, args)
   else:

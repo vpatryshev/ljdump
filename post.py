@@ -4,9 +4,8 @@
 import argparse
 import datetime as dt
 from pathlib import Path
-
-from dw_post import post_to_dreamwidth
-
+from utils import *
+from dw import *
 
 def read_post_file(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -58,6 +57,8 @@ def main():
 
     path = Path(args.file)
     subject, body = read_post_file(path)
+    assert subject, "Please provide subject"
+    assert body, "Please provide body"
 
     # Parse date if provided
     post_date = None
@@ -70,14 +71,14 @@ def main():
             print("Expected format: 2021-11-17T09:19:00+00:00")
             return
 
-    res = post_to_dreamwidth(
-        user=args.user,
-        password=args.password,
-        subject=subject,
-        body=body,
-        tags=args.tags,
-        security=args.security,
-        post_date=post_date,
+    blog = Blog(args.user, args.password)
+
+    res = blog.post(
+        subject,
+        body,
+        args.tags,
+        args.security,
+        post_date,
     )
 
     # Печатаем, что вернул сервер

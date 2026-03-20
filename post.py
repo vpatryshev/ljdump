@@ -3,10 +3,9 @@
 
 import argparse
 import datetime as dt
-import xmlrpc.client
 from pathlib import Path
 
-DW_XMLRPC = "https://www.dreamwidth.org/interface/xmlrpc"
+from dw_post import post_to_dreamwidth
 
 
 def read_post_file(path: Path):
@@ -24,45 +23,6 @@ def read_post_file(path: Path):
 
     return subject, body
 
-
-def post_to_dreamwidth(user: str, password: str, subject: str, body: str,
-                       tags: str = "", security: str = "public",
-                       post_date: dt.datetime = None):
-    server = xmlrpc.client.ServerProxy(DW_XMLRPC, allow_none=True)
-
-    # Use provided date or current time
-    timestamp = post_date if post_date else dt.datetime.now()
-
-    post = {
-        "username": user,
-        "password": password,
-        "ver": 1,
-        "lineendings": "unix",
-        "subject": subject,
-        "event": body,
-        "year": timestamp.year,
-        "mon": timestamp.month,
-        "day": timestamp.day,
-        "hour": timestamp.hour,
-        "min": timestamp.minute,
-        "props": {
-            "taglist": tags,
-            "opt_backdated": (post_date is not None)
-        },
-    }
-
-    # Dreamwidth понимает public / friends / private (как в LJ)
-    if security == "friends":
-        post["security"] = "usemask"
-        post["allowmask"] = 1
-    elif security == "private":
-        post["security"] = "private"
-    else:
-        post["security"] = "public"
-
-    # Используем LJ.XMLRPC.postevent
-    res = server.LJ.XMLRPC.postevent(post)
-    return res  # обычно содержит itemid, url и т.п.
 
 
 def main():

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # ljdumptohtml.py - convert sqlite livejournal archive to html pages 
-# Garrett Birkel et al
+# Garrett Birkel, Vlad Patryshev, et al
 # Version 1.8
 #
 # LICENSE
@@ -34,21 +34,18 @@ import re
 import calendar
 from datetime import *
 from xml.etree import ElementTree as ET
-from ljdumpsqlite import *
 import time
 from utils import *
 from config import *
+from db import *
+from ljdumpsqlite import *
+from journal import *
 
 MimeExtensions = {
     "image/gif": ".gif",
     "image/jpeg": ".jpg",
     "image/png": ".png",
 }
-
-
-def write_html(filename, html_as_string):
-    f = codecs.open(filename, "w", "UTF-8")
-    f.write(html_as_string)
 
 
 # journal: Name of journal
@@ -80,7 +77,7 @@ def create_template_page(journal, title_text, in_subfolder=True):
     header_inner = ET.SubElement(header, 'div', attrib={'class': 'inner'})
     header_h_title = ET.SubElement(header_inner, 'h1', attrib={'id': 'title'})
     header_h_title_span = ET.SubElement(header_h_title, 'span')
-    header_h_title_span.text = journal
+    header_h_title_span.text = journal.name
     header_h_pagetitle = ET.SubElement(header_inner, 'h2', attrib={'id': 'pagetitle'})
     header_h_pagetitle_span = ET.SubElement(header_h_pagetitle, 'span')
     header_h_pagetitle_span.text = title_text
@@ -311,7 +308,7 @@ def render_one_entry_container(journal, entry, comments_count, icons_by_keyword,
     a_user = ET.SubElement(span_user, 'a',
         attrib={'href': ('https://www.dreamwidth.org/users/%s' % journal),
                 'style': 'font-weight:bold;'})
-    a_user.text = journal
+    a_user.text = journal.name
 
     # This is an empty div that the entry body will be placed in later.
     ET.SubElement(entry_div_contents_inner, 'div',
@@ -397,7 +394,7 @@ def resolve_cached_image_references(content, image_urls_to_filenames):
     # Find any image URLs
     urls_found = re.findall(r'img[^<>]*\ssrc\s?=\s?[\'\"](https?:/+[^\s\"\'()<>]+)[\'\"]', content, flags=re.IGNORECASE)
     # Build a regular expression to detect images hosted on Dreamwidth
-    dw_hosted_pattern = re.compile('^https://(\w+).dreamwidth.org/file/\d+x\d+/(.+)')
+    dw_hosted_pattern = re.compile(r'^https://(\w+).dreamwidth.org/file/\d+x\d+/(.+)')
     uncached_urls = []
 
     for image_url in urls_found:
@@ -415,7 +412,7 @@ def resolve_cached_image_references(content, image_urls_to_filenames):
 
 
 def create_single_entry_page(journal, entry, comments, image_urls_to_filenames, icons_by_keyword, moods_by_id, previous_entry=None, next_entry=None):
-    page, content = create_template_page(journal, "%s entry %s" % (journal, entry['itemid']), True)
+    page, content = create_template_page(journal, f"{journal.name} entry {entry['itemid']}", True)
 
     # Top navigation area (e.g. "previous" and "next" links)
     topnav_div = ET.SubElement(content, 'div', attrib={'class': 'navigation topnav' })
@@ -513,7 +510,7 @@ def create_single_entry_page(journal, entry, comments, image_urls_to_filenames, 
 
 
 def create_history_page(journal, entries, comments_grouped_by_entry, image_urls_to_filenames, icons_by_keyword, moods_by_id, page_number, previous_page_entry_count=0, next_page_entry_count=0):
-    page, content = create_template_page(journal, "%s entries page %s" % (journal, page_number), True)
+    page, content = create_template_page(journal, f"{journal.name} entries page {page_number}", True)
 
     # Top navigation area (e.g. "previous" and "next" links)
     topnav_div = ET.SubElement(content, 'div', attrib={'class': 'navigation topnav' })
@@ -590,7 +587,7 @@ def create_history_page(journal, entries, comments_grouped_by_entry, image_urls_
 
 
 def create_table_of_contents_page(journal, entry_count, entries_table_of_contents, history_page_table_of_contents, tags_encountered, entries_by_tag):
-    page, content = create_template_page(journal, "%s archive" % journal, False)
+    page, content = create_template_page(journal, f"{journal.name} archive", False)
 
     toc_banner = ET.SubElement(content, 'h1')
     toc_banner.text = 'Number of entries: %s' % entry_count
@@ -657,7 +654,7 @@ def create_table_of_contents_page(journal, entry_count, entries_table_of_content
 
 
 def create_uncached_images_report_page(journal, entries):
-    page, content = create_template_page(journal, "%s uncached images" % journal, False)
+    page, content = create_template_page(journal, "{journal.name} uncached images", False)
 
     toc_banner = ET.SubElement(content, 'h1')
     toc_banner.text = 'Number of entries with uncached (possibly broken) images: %s' % len(entries)
@@ -710,18 +707,18 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
 
         # Make sure our cache folder and subfolder exist
         try:
-            os.mkdir("%s/images" % (journal))
+            os.mkdir(f"{journal.name}/images")
         except OSError as e:
             if e.errno == 17:   # Folder already exists
                 pass
         try:
-            os.mkdir("%s/images/%s" % (journal, subfolder))
+            os.mkdir(f"{journal.name}/images/{subfolder}")
         except OSError as e:
             if e.errno == 17:   # Folder already exists
                 pass
 
         # Copy the file stream directly into the file and close both
-        pic_file = open("%s/images/%s" % (journal, filename), "wb")
+        pic_file = open(f"{journal.name}/images/{filename}", "wb")
         shutil.copyfileobj(image_req, pic_file)
         image_req.close()
         pic_file.close()
@@ -738,20 +735,17 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
 
 
 def ljdumptohtml(
-    config, journal, cache_images=True, retry_images=True):
+    config, db_path, journal_name, cache_images=True, retry_images=True):
     username=config.username,
+    journal = Journal(journal_name)
     unique=config.unique,
     verbose=config.verbose,
     if verbose:
-        print("Starting conversion for: %s" % journal)
-
-    conn = None
-    cur = None
+        print(f"Starting conversion for: {journal}")
+    db = DB(db_path)
 
     # create a database connection
-    conn = connect_to_local_journal_db("%s/journal.db" % journal, verbose)
-    if not conn:
-        fail("Database could not be opened for journal %s" % journal)
+    conn = db.conn()
     cur = conn.cursor()
 
     all_entries = get_all_events(cur, verbose)
@@ -789,7 +783,7 @@ def ljdumptohtml(
     #
 
     if cache_images:
-        dw_hosted_pattern = re.compile('^https://(\w+).dreamwidth.org/file/\d+x\d+/(.+)')
+        dw_hosted_pattern = re.compile(r'^https://(\w+).dreamwidth.org/file/\d+x\d+/(.+)')
         image_resolve_max = 200
         entry_index = 0
         while image_resolve_max > 0:
@@ -836,9 +830,6 @@ def ljdumptohtml(
     for i in all_cached:
         image_urls_to_filenames[i['url']] = i['filename']
 
-    #pprint.pprint(image_urls_to_filenames)
-    #os._exit(os.EX_OK)
-
     #
     # Entry pages, one per entry.
     #
@@ -848,7 +839,7 @@ def ljdumptohtml(
     print("Rendering %s entry pages..." % (len(entries_by_date)))
 
     try:
-        os.mkdir("%s/entries" % (journal))
+        os.mkdir(f"{journal.name}/entries")
     except OSError as e:
         if e.errno == 17:   # Folder already exists
             pass
@@ -897,14 +888,8 @@ def ljdumptohtml(
                     previous_entry=previous_entry,
                     next_entry=next_entry
                 )
-        filepath = "%s/entries/entry-%s.html" % (journal, entry['itemid'])
-        if entry["itemid"] == "23588":
-            print("Oops: 23588")
-            os._exit(os.EX_OK)
 
-        write_html(filepath, page)
-
-        os.utime(filepath, (entry_timestamp, entry_timestamp))
+        journal.write_text("entries/entry-{entry['itemid']}.html", page, entry_timestamp)
 
         entry_body = entry['event']
         (entry_body, uncached) = resolve_cached_image_references(entry_body, image_urls_to_filenames)
@@ -932,7 +917,7 @@ def ljdumptohtml(
     print("Rendering %s history pages..." % (len(groups_of_twenty)))
 
     try:
-        os.mkdir("%s/history" % (journal))
+        os.mkdir(f"{journal.name}/history")
     except OSError as e:
         if e.errno == 17:   # Folder already exists
             pass
@@ -958,7 +943,7 @@ def ljdumptohtml(
                     previous_page_entry_count=previous_count,
                     next_page_entry_count=next_count
                 )
-        write_html("%s/history/page-%s.html" % (journal, i+1), page)
+        journal.write_text(f"history/page-{i+1}.html", page)
 
         # Used for building a table of contents later
         toc = {
@@ -1002,7 +987,7 @@ def ljdumptohtml(
             journal=journal,
             entries=entries_with_uncached_images,
         )
-    write_html("%s/uncached_images_report.html" % journal, page)
+    journal.write_text("uncached_images_report.html", page)
 
     print("Rendering table of contents page...")
 
@@ -1018,17 +1003,17 @@ def ljdumptohtml(
             tags_encountered=tags_encountered,
             entries_by_tag=entries_by_tag,
         )
-    write_html("%s/index.html" % journal, page)
+    journal.write_text("index.html", page)
 
     print("Copying support files...")
 
     # Copy the default stylesheet into the journal folder
     source = "stylesheet.css"
-    dest = "%s/stylesheet.css" % (journal)
+    dest = f"{journal.workdir}/stylesheet.css"
     shutil.copyfile(source, dest)
     # Copy a generic user icon into the journal folder
     source = "user.png"
-    dest = "%s/user.png" % (journal)
+    dest = f"{journal.workdir}/user.png"
     shutil.copyfile(source, dest)
 
     finish_with_database(conn, cur)
@@ -1048,10 +1033,12 @@ if __name__ == "__main__":
 
     config = setup("ljdump.config", args)
 
-    for journal in config.journals:
+    for journal_name in config.journals:
+        journal = Journal(journal_name)
         ljdumptohtml(
             config,
-            journal=journal,
+            f"{journal.workdir}/journal.db",
+            journal_name=journal_name,
             cache_images=args.cache_images,
             retry_images=args.retry_images
         )

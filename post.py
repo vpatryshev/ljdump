@@ -56,6 +56,10 @@ def main():
     args = ap.parse_args()
 
     path = Path(args.file)
+
+    if not path.is_file():
+        fail(f"Could not find the input file {path.absolute()}")
+
     subject, body = read_post_file(path)
     assert subject, "Please provide subject"
     assert body, "Please provide body"

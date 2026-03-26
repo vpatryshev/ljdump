@@ -29,10 +29,11 @@ import argparse, codecs, os, pickle, pprint, re, shutil, sys, xml.dom.minidom
 import xmlrpc.client
 from getpass import getpass
 import urllib
-from xml.sax import saxutils
 from datetime import *
 from ljdumpsqlite import *
 from config import *
+from blog import *
+from db import *
 from utils import *
 from ljdumptohtml import ljdumptohtml
 
@@ -41,8 +42,15 @@ def gettext(e):
         return ""
     return e[0].firstChild.nodeValue
 
+# Be respectful - delay between requests
+REQUEST_DELAY = 4.0  # seconds
+
+def throttle():
+  time.sleep(REQUEST_DELAY)
+
 
 def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
+    journal_path = f"{config.workdir}/{journal}"
     journal_server = config.server
     username = config.username
     password = config.password
@@ -50,39 +58,37 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
 
     m = re.search("(.*)/interface/xmlrpc", journal_server)
     if m:
-        journal_server = m.group(1)
+      journal_server = m.group(1)
     if username != journal:
-        authas = "&authas=%s" % journal
+      authas = "&authas=%s" % journal_path
     else:
-        authas = ""
+      authas = ""
 
     if verbose:
         print("Fetching journal entries for: %s" % journal)
     try:
-        os.mkdir(journal)
-        print("Created subdirectory: %s" % journal)
+        os.mkdir(journal_path)
+        print("Created subdirectory: %s" % journal_path)
     except:
         pass
 
-    session = startSession(journal_server, username, password)
+    blog = Blog(journal_server, username, password)
+    session = blog.startSession()
 
     server = xmlrpc.client.ServerProxy(journal_server+"/interface/xmlrpc")
 
     def authed(params):
-        """Transform API call params to include authorization."""
-        return dict(auth_method='clear', username=username, password=password, **params)
+      """Transform API call params to include authorization."""
+      return dict(auth_method='clear', username=username, password=password, **params)
 
     new_entry_count = 0
     new_comment_count = 0
     errors = 0
 
-    conn = None
-    cur = None
-
-    # create a database connection
-    conn = connect_to_local_journal_db("%s/journal.db" % journal, verbose)
-    if not conn:
-        fail("failed to connect to db")
+    # database connection
+    db_path = f"{journal_path}/journal.db"
+    db = DB(db_path, verbose)
+    conn = db.conn()
 
     create_tables_if_missing(conn, verbose)
     cur = conn.cursor()
@@ -126,50 +132,52 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     }))
 
     if verbose:
-        print("Sync items to process: %s out of %s returned." % (min(max_to_fetch, len(r['syncitems'])), len(r['syncitems'])))
+      print("Sync items to process: %s out of %s returned." % (min(max_to_fetch, len(r['syncitems'])), len(r['syncitems'])))
 
     for item in r['syncitems']:
-        if item['item'][0] == 'L':
-            if verbose:
-                print("Fetching journal entry %s (%s)" % (item['item'], item['action']))
-            try:
-                e = server.LJ.XMLRPC.getevents(authed({
-                    'ver': 1,
-                    'selecttype': "one",
-                    'itemid': item['item'][2:],
-                    'usejournal': journal,
-                }))
-                if e['events']:
-                    ev = e['events'][0]
-                    new_entry_count += 1
+      if item['item'][0] == 'L':
 
-                    # Process the event
+        if verbose:
+            print(f"{dt.datetime.now()} Fetching journal entry {item['item']} ({item['action']})")
+        try:
+          throttle()
+          e = server.LJ.XMLRPC.getevents(authed({
+              'ver': 1,
+              'selecttype': "one",
+              'itemid': item['item'][2:],
+              'usejournal': journal,
+          }))
+          if e['events']:
+            ev = e['events'][0]
+            new_entry_count += 1
 
-                    # Wanna do a bulk replace of something in your entire journal? This is how.
-                    #ev['event'] = re.sub('http://(edu.|staff.|)mmcs.sfedu.ru/~ulysses',
-                    #                     'https://a-pelenitsyn.github.io/Files',
-                    #                     str(ev['event']))
-                    # Write modified event to server
-                    #d = datetime.strptime(ev['eventtime'], '%Y-%m-%d %H:%M:%S')
-                    #ev1 = dict(lineendings="pc", year=d.year, mon=d.month, day=d.day,
-                    #          hour=d.hour, min=d.minute, **ev)
-                    #r1 = server.LJ.XMLRPC.editevent(authed(ev1))
+            # Process the event
 
-                    insert_or_update_event(cur, verbose, ev)
+            # Wanna do a bulk replace of something in your entire journal? This is how.
+            #ev['event'] = re.sub('http://(edu.|staff.|)mmcs.sfedu.ru/~ulysses',
+            #                     'https://a-pelenitsyn.github.io/Files',
+            #                     str(ev['event']))
+            # Write modified event to server
+            #d = datetime.strptime(ev['eventtime'], '%Y-%m-%d %H:%M:%S')
+            #ev1 = dict(lineendings="pc", year=d.year, mon=d.month, day=d.day,
+            #          hour=d.hour, min=d.minute, **ev)
+            #r1 = server.LJ.XMLRPC.editevent(authed(ev1))
 
-                    if new_entry_count > max_to_fetch:
-                        break
+            insert_or_update_event(cur, verbose, ev)
 
-                else:
-                    print("Unexpected empty item: %s" % item['item'])
-                    errors += 1
-            except xmlrpc.client.Fault as x:
-                print("Error getting item: %s" % item['item'])
-                pprint.pprint(x)
-                errors += 1
+            if new_entry_count > max_to_fetch:
+              break
 
-        # Assuming these emerge from the server in order by date from least to most recent...
-        sync_status['last_sync'] = item['time']
+          else:
+            print("Unexpected empty item: %s" % item['item'])
+            errors += 1
+        except xmlrpc.client.Fault as x:
+          print("Error getting item: %s" % item['item'])
+          pprint.pprint(x)
+          errors += 1
+
+      # Assuming these emerge from the server in order by date from least to most recent...
+      sync_status['last_sync'] = item['time']
         
     #
     # Comments
@@ -181,7 +189,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
         print("Fetching journal comment metadata for \"%s\" starting at ID %d" % (journal, max_comment_id))
 
     try:
-        f = open("%s/comment.meta" % journal)
+        f = open(f"{journal_path}/comment.meta")
         metacache = pickle.load(f)
         f.close()
     except:
@@ -350,12 +358,14 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     #
     # Userpics and user general info
     #
-
-    r = server.LJ.XMLRPC.login(authed({
+    try:
+      r = server.LJ.XMLRPC.login(authed({
         'ver': 1,
         'getpickws': 1,
         'getpickwurls': 1,
-    }))
+      }))
+    except ProtocolError as pe:
+      fail(f"Failed to log in, trying to get userpics and info, got {pe}")
 
     userpics = dict(zip(map(possible_unicode_or_none, r['pickws']), r['pickwurls']))
     if r['defaultpicurl']:
@@ -384,11 +394,11 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
                 picfn = re.sub(r'[*?\\/:<> "|]', "_", p)
                 try:
                     picfn = codecs.utf_8_decode(picfn)[0]
-                    picf = open("%s/userpics/%s%s" % (journal, picfn, ext), "wb")
+                    picf = open(f"{journal_path}/userpics/{picfn}{ext}", "wb")
                 except:
                     # for installations where the above utf_8_decode doesn't work
                     picfn = "".join([ord(x) < 128 and x or "_" for x in picfn])
-                    picf = open("%s/userpics/%s%s" % (journal, picfn, ext), "wb")
+                    picf = open(f"{journal_path}/userpics/{picfn}{ext}", "wb")
                 shutil.copyfileobj(pic, picf)
                 pic.close()
                 picf.close()
@@ -414,7 +424,8 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     if make_pages:
         ljdumptohtml(
             config,
-            journal=journal,
+            db_path,
+            journal_name=journal,
             cache_images=cache_images,
             retry_images=retry_images
         )

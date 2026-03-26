@@ -12,7 +12,8 @@ from utils import *
 DW_XMLRPC = "https://www.dreamwidth.org/interface/xmlrpc"
 
 class Blog:
-  def __init__(self, user: str, password: str):
+  def __init__(self, url: str, user: str, password: str):
+    self.url = url
     self.user = user
     self.password = password
     self.server = xmlrpc.client.ServerProxy(DW_XMLRPC, allow_none=True)
@@ -43,16 +44,34 @@ class Blog:
     }
 
     if security == "friends":
-        message["security"] = "usemask"
-        message["allowmask"] = 1
+      message["security"] = "usemask"
+      message["allowmask"] = 1
     elif security == "private":
-        message["security"] = "private"
+      message["security"] = "private"
     else:
-        message["security"] = "public"
+      message["security"] = "public"
 
     try:
-        return self.server.LJ.XMLRPC.postevent(message)
+      return self.server.LJ.XMLRPC.postevent(message)
     except Exception as e:
-        print(f"Error posting: {e}\n{message}")
-        fail("bad...")
+      fail(f"Error posting: {e}\n{message}")
+
+  def startSession(self):
+    """Log in with password and get session cookie."""
+    d = dict(mode = "sessiongenerate",
+             user = self.user,
+             password = self.password,
+             auth_method = "clear"
+    )
+    data = urllib.parse.urlencode(d).encode("utf-8")
+    r = urllib.request.urlopen(self.url+"/interface/flat", data=data)
+    response = {}
+    while True:
+      name = r.readline()
+      if len(name) == 0:
+        break
+      value = r.readline()
+      response[name.decode('utf-8').strip()] = value.decode('utf-8').strip()
+    r.close()
+    return response['ljsession']
 

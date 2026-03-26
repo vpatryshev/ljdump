@@ -34,6 +34,8 @@ import calendar
 from datetime import *
 import json
 import time
+import xmlrpc.client
+from xml.sax import saxutils
 
 MimeExtensions = {
     "image/gif": ".gif",
@@ -42,25 +44,76 @@ MimeExtensions = {
 }
 
 def fail(message):
-    """Fail with a message."""
-    print(message)
-    exit(1)
+  """Fail with a message."""
+  print(message)
+  exit(1)
 
-def startSession(journal_server, username, password):
-    """Log in with password and get session cookie."""
-    d = dict(   mode="sessiongenerate",
-                user=username,
-                auth_method="clear",
-                password=password
-    )
-    data = urllib.parse.urlencode(d).encode("utf-8")
-    r = urllib.request.urlopen(journal_server+"/interface/flat", data=data)
-    response = {}
-    while True:
-        name = r.readline()
-        if len(name) == 0:
-            break
-        value = r.readline()
-        response[name.decode('utf-8').strip()] = value.decode('utf-8').strip()
-    r.close()
-    return response['ljsession']
+def object_to_xml_string(accumulator, name, e):
+    accumulator += ("<%s>\n" % name)
+    for k in e.keys():
+        if isinstance(e[k], {}.__class__):
+            accumulator += object_to_xml_string(f, k, e[k])
+        else:
+            try:
+                s = str(e[k])
+            except UnicodeDecodeError:
+                # fall back to Latin-1 for old entries that aren't UTF-8
+                s = e[k].decode('cp1252')
+            accumulator += ("<%s>%s</%s>\n" % (k, saxutils.escape(s), k))
+    accumulator += ("</%s>\n" % name)
+    return accumulator
+
+
+def possible_unicode_or_none(u):
+    if u is None:
+        return None
+    if isinstance(u, xmlrpc.client.Binary):
+        s = u.data.decode('utf-8')
+    else:
+        try:
+            s = str(u)
+        except UnicodeDecodeError:
+            # fall back to Latin-1 for old entries that aren't UTF-8
+            s = u.decode('cp1252')
+    return s
+
+
+# Subclass of tzinfo swiped mostly from dateutil
+class fancytzoffset(tzinfo):
+    def __init__(self, name, offset):
+        self._name = name
+        self._offset = timedelta(seconds=offset)
+    def utcoffset(self, dt):
+        return self._offset
+    def dst(self, dt):
+        return timedelta(0)
+    def tzname(self, dt):
+        return self._name
+    def __eq__(self, other):
+        return (isinstance(other, fancytzoffset) and self._offset == other._offset)
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    def __repr__(self):
+        return "%s(%s, %s)" % (self.__class__.__name__,
+                               repr(self._name),
+                               self._offset.days*86400+self._offset.seconds)
+    __reduce__ = object.__reduce__
+
+
+# Variant tzinfo subclass for UTC
+class fancytzutc(tzinfo):
+    def utcoffset(self, dt):
+        return timedelta(0)
+    def dst(self, dt):
+        return timedelta(0)
+    def tzname(self, dt):
+        return "UTC"
+    def __eq__(self, other):
+        return (isinstance(other, fancytzutc) or
+                (isinstance(other, fancytzoffset) and other._offset == timedelta(0)))
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    def __repr__(self):
+        return "%s()" % self.__class__.__name__
+    __reduce__ = object.__reduce__
+

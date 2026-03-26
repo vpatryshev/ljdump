@@ -23,7 +23,6 @@ Usage:
 import argparse
 import re
 import time
-import sqlite3
 import os
 import xml.dom.minidom
 from datetime import datetime
@@ -32,12 +31,12 @@ from urllib.request import Request, urlopen, HTTPCookieProcessor, build_opener
 from http.cookiejar import CookieJar, Cookie
 from html.parser import HTMLParser
 from ljdumpsqlite import (
-    connect_to_local_journal_db,
     create_tables_if_missing,
     finish_with_database
 )
 from config import *
 from utils import *
+from journal import *
 
 # Be respectful - delay between requests
 REQUEST_DELAY = 2.0  # seconds
@@ -236,7 +235,7 @@ class DreamwidthScraper:
             return
 
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = DB(self.db_path).conn
             cur = conn.cursor()
 
             # Check if entries table exists
@@ -866,7 +865,7 @@ class DreamwidthScraper:
         self.log(f"Total: {new_entries_count} new entries, {skipped_count} skipped")
         return all_entries
 
-    def scrape_journal(self, max_entries=None):
+    def scrape_journal(self, max_entries):
         """Scrape all entries from a journal.
 
         Args:
@@ -988,10 +987,7 @@ class DreamwidthScraper:
             self.log("No entries to store")
             return
 
-        conn = connect_to_local_journal_db(db_path, self.verbose)
-        if not conn:
-            self.log("Failed to connect to database")
-            return
+        conn = DB(db_path, self.verbose).conn
 
         create_tables_if_missing(conn, self.verbose)
         cur = conn.cursor()
@@ -1061,7 +1057,7 @@ def main():
     parser.add_argument(
         '--max',
         type=int,
-        default=None,
+        default=200,
         help='Maximum number of entries to scrape'
     )
     parser.add_argument(
@@ -1108,7 +1104,7 @@ def main():
     args = parser.parse_args()
 
     verbose = not args.quiet
-    journal_name = args.journal
+    journal = Journal(args.journal)
 
     # Load credentials from config file or command line
     username = args.username
@@ -1128,26 +1124,28 @@ def main():
 
     # Try default config file if no credentials provided and no cookie/api_key
     if not username and not password and not cookie and not api_key:
-        default_config = f"{journal_name}.config"
-        if os.path.exists(default_config):
-            configFileData = load_config(default_config)
-            if configFileData:
-                username = configFileData.get('username')
-                password = configFileData.get('password')
-                if verbose:
-                    print(f"Loaded credentials from {default_config}")
+      default_config = f"{journal.name}.config"
+      if not os.path.exists(default_config):
+        default_config = f"work/default_config"
+      if os.path.exists(default_config):
+        configFileData = load_config(default_config)
+        if configFileData:
+          username = configFileData.get('username')
+          password = configFileData.get('password')
+          if verbose:
+            print(f"Loaded credentials from {default_config}")
 
     # Determine database path
     if args.output:
-        db_path = args.output
+      db_path = args.output
     else:
-        # Create journal directory if needed
-        os.makedirs(journal_name, exist_ok=True)
-        db_path = f"{journal_name}/journal.db"
+      # Create journal directory if needed
+      os.makedirs(journal.workdir, exist_ok=True)
+      db_path = f"{journal.workdir}/journal.db"
 
     # Create scraper and run
     scraper = DreamwidthScraper(
-        journal_name,
+        journal.name,
         verbose=verbose,
         username=username,
         password=password,
@@ -1155,7 +1153,7 @@ def main():
         api_key=api_key
     )
 
-    print(f"Scraping journal: {journal_name}")
+    print(f"Scraping journal: {journal.name}")
     print(f"Database: {db_path}")
 
     # Handle API key authentication (preferred method)

@@ -14,24 +14,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
-# dw.py lives in the ljdump project
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ljdump" / "ljdump"))
+from db import *
 from dw import *
-
-
-def fetch_entry(db_path: str, itemid: int) -> list:
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        rows = con.execute(
-            "SELECT itemid, subject, event, eventtime, props_taglist "
-            "FROM entries WHERE itemid = ?",
-            (itemid,)
-        ).fetchall()
-    finally:
-        con.close()
-
-    return [dict(r) for r in rows]
 
 def post(blog, entry, args):
 
@@ -86,8 +70,8 @@ def main():
     args = ap.parse_args()
 
     blog = Blog(args.user, args.password)
-
-    entries = fetch_entry(args.db, args.itemid)
+    db = DB(args.db)
+    entries = db.get(args.itemid)
     if not entries:
         print(f"0 records found for itemid={args.itemid}")
         return

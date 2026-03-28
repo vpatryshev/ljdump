@@ -5,7 +5,7 @@ import argparse
 import datetime as dt
 from pathlib import Path
 from utils import *
-from dw import *
+from blog import *
 
 def read_post_file(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -75,7 +75,7 @@ def main():
             print("Expected format: 2021-11-17T09:19:00+00:00")
             return
 
-    blog = Blog(args.user, args.password)
+    blog = Blog("https://www.dreamwidth.org", args.user, args.password)
 
     res = blog.post(
         subject,

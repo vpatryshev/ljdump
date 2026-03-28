@@ -47,17 +47,19 @@ class DB:
   def conn(self):
     return self.connection
 
-  def get(self, itemid: int) -> list:
+  def select(self, where: str) -> list:
+#    check_sql(where)
+    sql = f"SELECT itemid, subject, event, eventtime, props_taglist FROM entries WHERE {where}"
+    print(sql)
     try:
-      rows = self.connection.execute(
-        "SELECT itemid, subject, event, eventtime, props_taglist "
-        "FROM entries WHERE itemid = ?",
-        (itemid,)
-      ).fetchall()
+      rows = self.connection.execute(sql).fetchall()
     finally:
       self.connection.close()
 
     return [dict(r) for r in rows]
+
+  def get(self, itemid: int) -> list:
+    return self.select(f"itemid = {itemid}")
 
   # Check if entries table exists
   def exists(self):

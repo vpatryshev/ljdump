@@ -42,13 +42,6 @@ def gettext(e):
         return ""
     return e[0].firstChild.nodeValue
 
-# Be respectful - delay between requests
-REQUEST_DELAY = 4.0  # seconds
-
-def throttle():
-  time.sleep(REQUEST_DELAY)
-
-
 def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
     journal_path = f"{config.workdir}/{journal}"
     journal_server = config.server

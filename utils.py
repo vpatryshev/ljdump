@@ -48,6 +48,9 @@ def fail(message):
   print(message)
   exit(1)
 
+def throttle():
+  time.sleep(6)
+
 def object_to_xml_string(accumulator, name, e):
     accumulator += ("<%s>\n" % name)
     for k in e.keys():

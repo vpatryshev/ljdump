@@ -162,12 +162,16 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
               break
 
           else:
-            print("Unexpected empty item: %s" % item['item'])
+            print(f"Unexpected empty item: {item['item']}")
             errors += 1
         except xmlrpc.client.Fault as x:
-          print("Error getting item: %s" % item['item'])
+          print(f"Fault getting item: {item['item']}")
           pprint.pprint(x)
           errors += 1
+        except xmlrpc.client.ProtocolError as pe:
+            print(f"ProtocolError({pe.url}, {pe.errcode}, {pe.errmsg}) getting item: {item['item']}")
+            pprint.pprint(x)
+            errors += 1
 
       # Assuming these emerge from the server in order by date from least to most recent...
       sync_status['last_sync'] = item['time']
@@ -179,7 +183,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     max_comment_id = sync_status['last_max_comment_id']
 
     if verbose:
-        print("Fetching journal comment metadata for \"%s\" starting at ID %d" % (journal, max_comment_id))
+        print(f"Fetching journal comment metadata for \"{journal}\" starting at ID {max_comment_id}")
 
     try:
         f = open(f"{journal_path}/comment.meta")

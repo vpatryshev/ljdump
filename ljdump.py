@@ -78,13 +78,11 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     new_comment_count = 0
     errors = 0
 
-    # database connection
     db_path = f"{journal_path}/journal.db"
     db = DB(db_path, verbose)
-    conn = db.conn()
 
-    create_tables_if_missing(conn, verbose)
-    cur = conn.cursor()
+    create_tables_if_missing(db, verbose)
+    cur = db.cursor()
 
     sync_status = get_sync_status_or_defaults(cur, "", 0)
 
@@ -416,7 +414,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     if errors > 0:
         print("%d errors" % errors)
 
-    finish_with_database(conn, cur)
+    db.close(cur)
 
     if make_pages:
         ljdumptohtml(

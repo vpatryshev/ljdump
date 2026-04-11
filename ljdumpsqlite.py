@@ -33,136 +33,114 @@ from builtins import str
 from db import *
 from utils import *
 
+TABLES = [
+  """status (
+      lastsync TEXT,
+      lastmaxcommentid INTEGER
+    )""",
+  """user (
+      journal_short_name TEXT,
+      defaultpicurl TEXT,
+      fullname TEXT,
+      userid INTEGER
+    )""",
+  """entries (
+      itemid INTEGER PRIMARY KEY NOT NULL,
+      anum INTEGER,
+      eventtime TEXT NOT NULL,
+      eventtime_unix REAL NOT NULL,
+      logtime TEXT NOT NULL,
+      logtime_unix REAL NOT NULL,
 
-def create_tables_if_missing(conn, verbose):
-    """ create needed database tables if missing
-    :param conn: database connection
-    :param verbose: whether we are verbose logging
-    """
-    if verbose:
-        print('Creating tables if needed')
+      subject TEXT,
+      event TEXT NOT NULL,
+      url TEXT,
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS status (
-            lastsync TEXT,
-            lastmaxcommentid INTEGER
-        )""")
+      props_commentalter INTEGER,
+      props_current_moodid INTEGER,
+      props_current_music TEXT,
+      props_import_source TEXT,
+      props_interface TEXT,
+      props_opt_backdated INTEGER,
+      props_picture_keyword TEXT,
+      props_picture_mapid INTEGER,
+      props_taglist TEXT,
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS user (
-            journal_short_name TEXT,
-            defaultpicurl TEXT,
-            fullname TEXT,
-            userid INTEGER
-        )""")
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS entries (
-            itemid INTEGER PRIMARY KEY NOT NULL,
-            anum INTEGER,
-            eventtime TEXT NOT NULL,
-            eventtime_unix REAL NOT NULL,
-            logtime TEXT NOT NULL,
-            logtime_unix REAL NOT NULL,
-
-            subject TEXT,
-            event TEXT NOT NULL,
-            url TEXT,
-
-            props_commentalter INTEGER,
-            props_current_moodid INTEGER,
-            props_current_music TEXT,
-            props_import_source TEXT,
-            props_interface TEXT,
-            props_opt_backdated INTEGER,
-            props_picture_keyword TEXT,
-            props_picture_mapid INTEGER,
-            props_taglist TEXT,
-
-            raw_props TEXT NOT NULL
-        )""")
-
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS entries_eventtime_unix
-            ON "entries" (eventtime_unix);
-        """)
-
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS entries_logtime_unix
-            ON "entries" (logtime_unix);
-        """)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY NOT NULL,
-            entryid INTEGER NOT NULL,
-            date TEXT,
-            date_unix REAL,
-            parentid INTEGER,
-            posterid INTEGER,
-            user TEXT,
-            subject TEXT,
-            body TEXT,
-            state TEXT
-        )""")
-
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS comments_date_unix
-            ON "comments" (date_unix);
-        """)
-
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS comments_entryid
-            ON "comments" (entryid);
-        """)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS moods (
-            id INTEGER PRIMARY KEY NOT NULL,
-            name TEXT,
-            parent INTEGER
-        )
-        """)
-
+      raw_props TEXT NOT NULL
+    )""",
+  """comments (
+      id INTEGER PRIMARY KEY NOT NULL,
+      entryid INTEGER NOT NULL,
+      date TEXT,
+      date_unix REAL,
+      parentid INTEGER,
+      posterid INTEGER,
+      user TEXT,
+      subject TEXT,
+      body TEXT,
+      state TEXT
+    )""",
+  """moods (
+      id INTEGER PRIMARY KEY NOT NULL,
+      name TEXT,
+      parent INTEGER
+    )""",
     # There is a "groups" sructure inside each tag that appears to count uses of each
     # tag in groups the user belongs to. We're not catching that here.
     # https://github.com/dreamwidth/dreamwidth/blob/18169f4a4f909527b1acc5a7eb17f90f4a56068c/cgi-bin/LJ/Protocol.pm#L3847C21-L3847C26
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS tags (
-            name TEXT PRIMARY KEY NOT NULL,
-            display INTEGER,
-            security_private INTEGER,
-            security_protected INTEGER,
-            security_public INTEGER,
-            security_level TEXT,
-            uses INTEGER
-        )""")
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS icons (
-            keywords TEXT PRIMARY KEY NOT NULL,
-            filename TEXT,
-            url TEXT
-        )""")
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users_map (
-            id INTEGER PRIMARY KEY NOT NULL,
-            name TEXT
-        )""")
+  """tags (
+      name TEXT PRIMARY KEY NOT NULL,
+      display INTEGER,
+      security_private INTEGER,
+      security_protected INTEGER,
+      security_public INTEGER,
+      security_level TEXT,
+      uses INTEGER
+  )""",
+  """icons (
+      keywords TEXT PRIMARY KEY NOT NULL,
+      filename TEXT,
+      url TEXT
+  )""",
+  """users_map (
+      id INTEGER PRIMARY KEY NOT NULL,
+      name TEXT
+  )""",
 
     # This table does not reflect any data taken directly from the journal site.
     # It's used to resolve URLs for images in entries with their cached counterparts,
     # when building the local HTML.
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS cached_images (
-            id INTEGER PRIMARY KEY NOT NULL,
-            url TEXT NOT NULL UNIQUE,
-            filename TEXT,
-            date_first_seen REAL,
-            date_last_attempted REAL,
-            cached INTEGER NOT NULL
-        )""")
+  """cached_images (
+      id INTEGER PRIMARY KEY NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      filename TEXT,
+      date_first_seen REAL,
+      date_last_attempted REAL,
+      cached INTEGER NOT NULL
+  )""",
+]
+
+INDEXES = [
+  """entries_eventtime_unix ON "entries" (eventtime_unix)""",
+  """entries_logtime_unix ON "entries" (logtime_unix)""",
+  """comments_date_unix ON "comments" (date_unix) """,
+  """comments_entryid ON "comments" (entryid)"""
+]
+
+def create_tables_if_missing(db, verbose):
+    """ create required database tables if missing
+    :param db: database
+    :param verbose: whether we are verbose logging
+    """
+    if verbose:
+      print('Creating tables if needed')
+
+    for table in TABLES:
+      db.execute(f"CREATE TABLE IF NOT EXISTS {table};")
+
+    for index in INDEXES:
+        db.execute(f"CREATE INDEX IF NOT EXISTS {index}""")
+
 
 
 def get_sync_status_or_defaults(cur, last_sync, last_max_comment_id):
@@ -844,13 +822,3 @@ def set_sync_status(cur, status):
     :param status: sync status record
     """
     cur.execute("UPDATE status SET lastsync = ?, lastmaxcommentid = ?", (status['last_sync'], status['last_max_comment_id']))
-
-
-def finish_with_database(conn, cur):
-    """ commit and close the cursor and database
-    :param conn: database connection
-    :param cur: database cursor
-    """
-    cur.close()
-    conn.commit()
-    conn.close()

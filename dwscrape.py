@@ -31,11 +31,8 @@ from urllib.request import Request, urlopen, HTTPCookieProcessor, build_opener
 from http.cookiejar import CookieJar, Cookie
 from html.parser import HTMLParser
 from ljdumpsqlite import (
-    create_tables_if_missing,
-    finish_with_database
+    create_tables_if_missing
 )
-from config import *
-from utils import *
 from journal import *
 
 # Be respectful - delay between requests
@@ -235,8 +232,8 @@ class DreamwidthScraper:
             return
 
         try:
-            conn = DB(self.db_path).conn
-            cur = conn.cursor()
+            db = DB(self.db_path)
+            cur = db.cursor()
 
             # Check if entries table exists
             cur.execute("""
@@ -245,14 +242,14 @@ class DreamwidthScraper:
             """)
             if not cur.fetchone():
                 self.log("Database exists but no entries table - will scrape all entries")
-                conn.close()
+                db.close()
                 return
 
             # Load all existing itemids
             cur.execute("SELECT itemid FROM entries")
             self.existing_itemids = set(row[0] for row in cur.fetchall())
 
-            conn.close()
+            db.close()
 
             if self.existing_itemids:
                 self.log(f"Found {len(self.existing_itemids)} existing entries in database")
@@ -987,10 +984,10 @@ class DreamwidthScraper:
             self.log("No entries to store")
             return
 
-        conn = DB(db_path, self.verbose).conn
+        db = DB(db_path, self.verbose)
 
-        create_tables_if_missing(conn, self.verbose)
-        cur = conn.cursor()
+        create_tables_if_missing(db, self.verbose)
+        cur = db.cursor()
 
         # Store user info
         cur.execute("""
@@ -1040,8 +1037,8 @@ class DreamwidthScraper:
             except sqlite3.Error as e:
                 self.log(f"Error storing entry {entry['itemid']}: {e}")
 
-        conn.commit()
-        finish_with_database(conn, cur)
+
+        db.close(cur)
 
         self.log(f"Stored {stored_count} entries in database")
 

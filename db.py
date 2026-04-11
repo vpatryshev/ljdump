@@ -28,8 +28,9 @@ import sys
 from pathlib import Path
 from utils import *
 
+
 class DB:
-  def __init__(self, path: str, verbose = False):
+  def __init__(self, path: str, verbose=False):
     self.verbose = verbose
     self.log(f"Opening local database: {path}")
 
@@ -37,24 +38,25 @@ class DB:
       fail(f"Could not find the database file {Path(path).absolute()}")
 
     try:
-      self.connection = sqlite3.connect(path)
-      self.connection.row_factory = sqlite3.Row
+      self.__connection = sqlite3.connect(path)
+      self.__connection.row_factory = sqlite3.Row
     except Error as e:
       fail(f"Failed to connect to db: {e}")
 
+  def cursor(self):
+    return self.__connection.cursor()
 
-  # This is temporary; will delegate everything into this class
-  def conn(self):
-    return self.connection
+  def execute(self, sql: str):
+    self.cursor().execute(sql)
 
   def select(self, where: str) -> list:
-#    check_sql(where)
+    #    check_sql(where)
     sql = f"SELECT itemid, subject, event, eventtime, props_taglist FROM entries WHERE {where}"
     print(sql)
     try:
-      rows = self.connection.execute(sql).fetchall()
+      rows = self.execute(sql).fetchall()
     finally:
-      self.connection.close()
+      self.__connection.close()
 
     return [dict(r) for r in rows]
 
@@ -63,7 +65,7 @@ class DB:
 
   # Check if entries table exists
   def exists(self):
-    cur = self.connection.cursor()
+    cur = self.cursor()
 
     cur.execute(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='entries'")
@@ -72,3 +74,20 @@ class DB:
   def log(self, message):
     if self.verbose:
       print(message)
+
+  def set_sync_status(self, status):
+    """ set values in the current status record
+    :param cur: database cursor
+    :param status: sync status record
+    """
+    self.cursor().execute("UPDATE status SET lastsync = ?, lastmaxcommentid = ?",
+                          (status['last_sync'], status['last_max_comment_id']))
+
+  def close(self, cursor):
+    """ commit and close the cursor and database
+    :param cursor: database cursor
+    """
+    if cursor != None:
+      cursor.close()
+    self.__connection.commit()
+    self.__connection.close()

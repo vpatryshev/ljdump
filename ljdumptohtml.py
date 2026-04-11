@@ -744,9 +744,7 @@ def ljdumptohtml(
         print(f"Starting conversion for: {journal}")
     db = DB(db_path)
 
-    # create a database connection
-    conn = db.conn()
-    cur = conn.cursor()
+    cur = db.cursor()
 
     all_entries = get_all_events(cur, verbose)
     all_comments = get_all_comments(cur, verbose)
@@ -1015,8 +1013,7 @@ def ljdumptohtml(
     source = "user.png"
     dest = f"{journal.workdir}/user.png"
     shutil.copyfile(source, dest)
-
-    finish_with_database(conn, cur)
+    db.close(cur)
 
     print("Done!")
 

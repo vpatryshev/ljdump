@@ -139,7 +139,7 @@ def create_tables_if_missing(db, verbose):
       db.execute(f"CREATE TABLE IF NOT EXISTS {table};")
 
     for index in INDEXES:
-        db.execute(f"CREATE INDEX IF NOT EXISTS {index}""")
+        db.execute(f"CREATE INDEX IF NOT EXISTS {index};")
 
 
 

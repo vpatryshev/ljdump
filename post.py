@@ -85,12 +85,11 @@ def main():
         post_date,
     )
 
-    # Печатаем, что вернул сервер
-    print("OK")
+    # Printing the server response
     for k in ("itemid", "anum", "url"):
         if k in res:
             print(f"{k}: {res[k]}")
-    # На всякий случай покажем весь ответ, если там другое
+    # If nothing good returned, show the whole response
     if not any(k in res for k in ("itemid", "anum", "url")):
         print(res)
 

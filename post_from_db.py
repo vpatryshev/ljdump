@@ -70,7 +70,6 @@ def main():
   args = ap.parse_args()
 
   blog = Blog(args.server, args.user, args.password)
-  journal = Journal(args.user)
   db = DB(f"work/{args.db}")
   if args.itemid != None:
     entries = db.get(args.itemid)

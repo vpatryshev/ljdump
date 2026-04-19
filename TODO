@@ -1,3 +1,4 @@
 - userpic without keyword
 - download lj community (usejournal parameter)
 - https://www.livejournal.com/settings/?c=OldEncoding
+- move all scripts to scripts/

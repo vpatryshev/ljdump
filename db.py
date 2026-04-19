@@ -83,7 +83,7 @@ class DB:
     self.cursor().execute("UPDATE status SET lastsync = ?, lastmaxcommentid = ?",
                           (status['last_sync'], status['last_max_comment_id']))
 
-  def close(self, cursor):
+  def close(self, cursor = None):
     """ commit and close the cursor and database
     :param cursor: database cursor
     """

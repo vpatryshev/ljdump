@@ -23,16 +23,10 @@
 #    misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
 #
-# Copyright (c) 2005-2026 Greg Hewgill and contributors
+# Copyright (c) 2005-2026 Greg Hewgill, Vlad Patryshev and contributors
 
-import os, codecs, pprint, argparse, shutil, xml.dom.minidom
-from getpass import getpass
-import urllib
-import html
-import re
-import calendar
+import sys
 from datetime import *
-import json
 import time
 import xmlrpc.client
 from xml.sax import saxutils
@@ -45,7 +39,7 @@ MimeExtensions = {
 
 def fail(message):
   """Fail with a message."""
-  print(message)
+  print(f"\n❌ {message}", file=sys.stderr)
   exit(1)
 
 def throttle():

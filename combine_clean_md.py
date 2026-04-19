@@ -103,7 +103,7 @@ def combine_markdown_files(config, input_pattern, output_file):
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         fail("Usage: combine_clean_md.py id <input_pattern> <output_file>\n" +
-             "Example: combine_clean_md.py 'JuanEnrique_markdown/*.md' JuanEnrique_combined.md")
+             "Example: combine_clean_md.py 'work/JuanEnrique/markdown/*.md' JuanEnrique_combined.md")
     id=sys.argv[1]
     input_pattern = sys.argv[2]
     output_file = sys.argv[3]

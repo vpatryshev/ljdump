@@ -51,6 +51,8 @@ TABLES = [
       eventtime_unix REAL NOT NULL,
       logtime TEXT NOT NULL,
       logtime_unix REAL NOT NULL,
+      updatetime TEXT,
+      updatedtime_unix REAL,
 
       subject TEXT,
       event TEXT NOT NULL,

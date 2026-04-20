@@ -6,7 +6,7 @@ Shared library for posting entries to Dreamwidth via XML-RPC.
 
 import datetime as dt
 import xmlrpc.client
-from utils import *
+import urllib.parse
 from utils import *
 
 DW_XMLRPC = "https://www.dreamwidth.org/interface/xmlrpc"

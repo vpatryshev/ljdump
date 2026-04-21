@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 #
-# ljdumpsqlite.py - SQLite support tools for livejournal archiver
-# Version 1.8
+# ljdumpdb.py - SQLite support tools for livejournal/dreamwidth archiver
+# Version 2.0
 #
 # LICENSE
 #
@@ -22,14 +22,10 @@
 #    misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
 #
-# Copyright (c) 2024 Garrett Birkel and contributors
+# Copyright (c) 2024 Garrett Birkel, Vlad Patryshev and contributors
 
 from datetime import *
 import calendar
-import sqlite3
-import xmlrpc.client
-from sqlite3 import Error
-from builtins import str
 from db import *
 from utils import *
 
@@ -129,21 +125,25 @@ INDEXES = [
   """comments_entryid ON "comments" (entryid)"""
 ]
 
-def create_tables_if_missing(db, verbose):
-    """ create required database tables if missing
-    :param db: database
-    :param verbose: whether we are verbose logging
+class LJDB(DB):
+  def __init__(self, path, verbose=False):
+    """ Livejournal/Dreamwidth database
+      :param db: database
+      :param verbose: whether we are verbose logging
     """
-    if verbose:
+    super().__init__(path, verbose)
+
+  def create_tables_if_missing(self):
+    """ create required database tables if missing
+    """
+    if self.verbose:
       print('Creating tables if needed')
 
     for table in TABLES:
-      db.execute(f"CREATE TABLE IF NOT EXISTS {table};")
+      self.execute(f"CREATE TABLE IF NOT EXISTS {table};")
 
     for index in INDEXES:
-        db.execute(f"CREATE INDEX IF NOT EXISTS {index};")
-
-
+      self.execute(f"CREATE INDEX IF NOT EXISTS {index};")
 
 def get_sync_status_or_defaults(cur, last_sync, last_max_comment_id):
     """ get values from the current status record, or create a new one if missing

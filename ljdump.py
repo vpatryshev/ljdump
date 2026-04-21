@@ -30,7 +30,7 @@ import xmlrpc.client
 from getpass import getpass
 import urllib
 from datetime import *
-from ljdumpsqlite import *
+from ljdumpdb import *
 from config import *
 from blog import *
 from db import *
@@ -79,9 +79,9 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     errors = 0
 
     db_path = f"{journal_path}/journal.db"
-    db = DB(db_path, verbose)
+    db = LJDB(db_path, verbose)
 
-    create_tables_if_missing(db, verbose)
+    db.create_tables_if_missing()
     cur = db.cursor()
 
     sync_status = get_sync_status_or_defaults(cur, "", 0)
@@ -112,15 +112,18 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     #pprint.pprint(r)
     #os._exit(os.EX_OK)
 
-    # There is apparently no support for fetching pages here, so repeated calls
-    # to this will fetch overlapping lists of events (which can be quite long)
-    # as we catch up to the present.  If getevents syncitems (above) worked properly
-    # we could avoid this.
-    r = server.LJ.XMLRPC.syncitems(authed({
+    try:
+      # There is apparently no support for fetching pages here, so repeated calls
+      # to this will fetch overlapping lists of events (which can be quite long)
+      # as we catch up to the present.  If getevents syncitems (above) worked properly
+      # we could avoid this.
+      r = server.LJ.XMLRPC.syncitems(authed({
         'ver': 1,
         'lastsync': sync_status['last_sync'],
         'usejournal': journal,
-    }))
+      }))
+    except xmlrpc.client.ProtocolError as x:
+      fail(f"Failed synching, last sync={sync_status['last_sync']}")
 
     if verbose:
       print("Sync items to process: %s out of %s returned." % (min(max_to_fetch, len(r['syncitems'])), len(r['syncitems'])))
@@ -413,17 +416,17 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
             print("%d new entries, %d new comments" % (new_entry_count, new_comment_count))
     if errors > 0:
         print("%d errors" % errors)
-
     db.close(cur)
-
     if make_pages:
         ljdumptohtml(
             config,
-            db_path,
+            LJDB(db_path, verbose),
             journal_name=journal,
             cache_images=cache_images,
             retry_images=retry_images
         )
+
+
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Livejournal archive utility")

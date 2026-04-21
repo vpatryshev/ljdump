@@ -30,7 +30,7 @@ from urllib.parse import urljoin, urlparse, urlencode
 from urllib.request import Request, urlopen, HTTPCookieProcessor, build_opener
 from http.cookiejar import CookieJar, Cookie
 from html.parser import HTMLParser
-from ljdumpsqlite import (
+from ljdumpdb import (
     create_tables_if_missing
 )
 from journal import *

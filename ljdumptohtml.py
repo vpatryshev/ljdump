@@ -38,7 +38,7 @@ import time
 from utils import *
 from config import *
 from db import *
-from ljdumpsqlite import *
+from ljdumpdb import *
 from journal import *
 
 MimeExtensions = {
@@ -735,14 +735,13 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
 
 
 def ljdumptohtml(
-    config, db_path, journal_name, cache_images=True, retry_images=True):
+    config, db, journal_name, cache_images=True, retry_images=True):
     username=config.username,
     journal = Journal(journal_name)
     unique=config.unique,
     verbose=config.verbose,
     if verbose:
         print(f"Starting conversion for: {journal}")
-    db = DB(db_path)
 
     cur = db.cursor()
 

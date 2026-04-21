@@ -69,7 +69,7 @@ class TestDBInit(unittest.TestCase):
 
     def test_fails_on_missing_file(self):
         """DB.__init__ calls fail() (which calls exit(1)) when the file is absent."""
-        with self.assertRaises(SystemExit):
+        with patch("builtins.print"), self.assertRaises(SystemExit):
             DB("/nonexistent/path/no_such_file.db")
 
     def test_verbose_logs_opening_message(self, ):
@@ -153,8 +153,9 @@ class TestDBLog(unittest.TestCase):
         os.unlink(self._path)
 
     def test_log_prints_when_verbose(self):
-        db = DB(self._path, verbose=True)
         with patch("builtins.print") as mock_print:
+            db = DB(self._path, verbose=True)
+            mock_print.reset_mock()
             db.log("test message")
             mock_print.assert_called_once_with("test message")
 
@@ -211,11 +212,11 @@ class TestDBSelectBug(unittest.TestCase):
             pass
 
     def test_select_raises_attribute_error_due_to_execute_returning_none(self):
-        with self.assertRaises(AttributeError):
+        with patch("builtins.print"), self.assertRaises(AttributeError):
             self.db.select("itemid = 1")
 
     def test_get_raises_attribute_error_due_to_execute_returning_none(self):
-        with self.assertRaises(AttributeError):
+        with patch("builtins.print"), self.assertRaises(AttributeError):
             self.db.get(1)
 
 

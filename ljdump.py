@@ -82,9 +82,8 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     db = LJDB(db_path, verbose)
 
     db.create_tables_if_missing()
-    cur = db.cursor()
 
-    sync_status = get_sync_status_or_defaults(cur, "", 0)
+    sync_status = db.get_sync_status_or_defaults("", 0)
 
     #
     # Entries (events)
@@ -157,7 +156,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
             #          hour=d.hour, min=d.minute, **ev)
             #r1 = server.LJ.XMLRPC.editevent(authed(ev1))
 
-            insert_or_update_event(cur, verbose, ev)
+            db.insert_or_update_event(ev)
 
             if new_entry_count > max_to_fetch:
               break
@@ -230,9 +229,9 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
             print("Fetched %d metadata entries. Our max_comment_id is now %s. Highest comment_id on server is %d." % (meta_comments_fetched_count, new_max_comment_id, maxid))
 
         for u in meta.getElementsByTagName("usermap"):
-            insert_or_update_user_in_map(cur, verbose, u.getAttribute("id"), u.getAttribute("user"))
+            db.insert_or_update_user_in_map(u.getAttribute("id"), u.getAttribute("user"))
 
-    usermap = get_users_map(cur, verbose)
+    usermap = db.get_users_map()
 
     # Make a reduced array of comment ids, containing only the ids
     # between the id of the comment we fetched in the last session,
@@ -298,7 +297,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
             except ValueError:
                 pass
 
-            was_new = insert_or_update_comment(cur, verbose, db_comment)
+            was_new = db.insert_or_update_comment(db_comment)
             if was_new:
                 new_comment_count += 1
 
@@ -317,7 +316,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     }))
 
     for t in r['moods']:
-        insert_or_update_mood(cur, verbose,
+        db.insert_or_update_mood(
             {   'id': t['id'],
                 'name': t['name'],
                 'parent': t['parent']})
@@ -344,7 +343,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
             if 'public' in s: ts_public = s['public']
             if 'level' in s: ts_level = s['level']
 
-        insert_or_update_tag(cur, verbose,
+        db.insert_or_update_tag(
             {   'name': possible_unicode_or_none(t['name']),
                 'display': t['display'],
                 'security_private': ts_private,
@@ -369,7 +368,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     if r['defaultpicurl']:
         userpics['*'] = r['defaultpicurl']
 
-    insert_or_update_user_info(cur, verbose,
+    db.insert_or_update_user_info(
         {   'journal_short_name': journal,
             'defaultpicurl': possible_unicode_or_none(r['defaultpicurl']),
             'fullname': possible_unicode_or_none(r['fullname']),
@@ -400,14 +399,14 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
                 shutil.copyfileobj(pic, picf)
                 pic.close()
                 picf.close()
-                insert_or_update_icon(cur, verbose,
+                db.insert_or_update_icon(
                     {   'keywords': p,
                         'filename': (picfn+ext),
                         'url': userpics[p]})
 
     sync_status['last_max_comment_id'] = new_max_comment_id
 
-    set_sync_status(cur, sync_status)
+    db.set_sync_status(sync_status)
 
     if verbose or (new_entry_count > 0 or new_comment_count > 0):
         if original_last_sync:
@@ -416,7 +415,7 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
             print("%d new entries, %d new comments" % (new_entry_count, new_comment_count))
     if errors > 0:
         print("%d errors" % errors)
-    db.close(cur)
+    db.close(None)
     if make_pages:
         ljdumptohtml(
             config,

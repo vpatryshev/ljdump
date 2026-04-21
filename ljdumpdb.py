@@ -128,7 +128,7 @@ INDEXES = [
 class LJDB(DB):
   def __init__(self, path, verbose=False):
     """ Livejournal/Dreamwidth database
-      :param db: database
+      :param path: path to the database file
       :param verbose: whether we are verbose logging
     """
     super().__init__(path, verbose)
@@ -145,12 +145,12 @@ class LJDB(DB):
     for index in INDEXES:
       self.execute(f"CREATE INDEX IF NOT EXISTS {index};")
 
-def get_sync_status_or_defaults(cur, last_sync, last_max_comment_id):
+  def get_sync_status_or_defaults(self, last_sync, last_max_comment_id):
     """ get values from the current status record, or create a new one if missing
-    :param cur: database cursor
     :param last_sync: default lastsync value
     :param last_max_comment_id: default lastmaxcommentid value
     """
+    cur = self.cursor()
     cur.execute("SELECT lastsync, lastmaxcommentid FROM status")
     row = cur.fetchone()
     if not row:
@@ -158,18 +158,15 @@ def get_sync_status_or_defaults(cur, last_sync, last_max_comment_id):
     else:
         last_sync = row[0]
         last_max_comment_id = row[1]
-    status = {"last_sync": last_sync, "last_max_comment_id": last_max_comment_id}
-    return status
+    return {"last_sync": last_sync, "last_max_comment_id": last_max_comment_id}
 
-
-def get_user_info(cur, verbose):
+  def get_user_info(self):
     """ get the current user info record in the database
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An object of user info or None if none exists yet
     """
-    if verbose:
+    if self.verbose:
         print('Fetching user info from database')
+    cur = self.cursor()
     cur.execute("SELECT journal_short_name, defaultpicurl, fullname, userid FROM user LIMIT 1")
     row = cur.fetchone()
     if not row:
@@ -182,17 +179,15 @@ def get_user_info(cur, verbose):
                 "userid": row[3]
             }
 
-
-def insert_or_update_user_info(cur, verbose, data):
+  def insert_or_update_user_info(self, data):
     """ update or insert the single record in the user info table
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param data: user info data
     """
+    cur = self.cursor()
     cur.execute("SELECT journal_short_name FROM user LIMIT 1")
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new user info record: %s' % (data['journal_short_name']))
         cur.execute("""
             INSERT INTO user (
@@ -201,7 +196,7 @@ def insert_or_update_user_info(cur, verbose, data):
                 :journal_short_name, :defaultpicurl, :fullname, :userid
             )""", data)
     else:
-        if verbose:
+        if self.verbose:
             print('Updating existing user info record for: %s' % (data['journal_short_name']))
         cur.execute("""
             UPDATE user SET
@@ -210,15 +205,13 @@ def insert_or_update_user_info(cur, verbose, data):
                 fullname = :fullname,
                 userid = :userid""", data)
 
-
-def get_all_events(cur, verbose):
+  def get_all_events(self):
     """ get all entries in the database
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An array of entry objects
     """
-    if verbose:
+    if self.verbose:
         print('Fetching all entries from database')
+    cur = self.cursor()
     cur.execute("""
         SELECT
             itemid,
@@ -243,7 +236,6 @@ def get_all_events(cur, verbose):
     rows = cur.fetchall()
     entries = []
     for row in rows:
-        title = (row[1] or u'')
         entry = {
             "itemid": row[0],
             "anum": row[1],
@@ -271,22 +263,16 @@ def get_all_events(cur, verbose):
         entries.append(entry)
     return entries
 
-
-def insert_or_update_event(cur, verbose, ev):
+  def insert_or_update_event(self, ev):
     """ insert a new entry or update any preexisting one with a matching itemid
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
-    :param entry: entry as received from data provider
+    :param ev: entry as received from data provider
     """
-    # An instance of our custom time zone class that's fixed to UTC.
     tz_utc = fancytzutc()
 
     eventtime = datetime.strptime(ev['eventtime'], '%Y-%m-%d %H:%M:%S')
     eventtime = eventtime.replace(tzinfo=tz_utc)
     logtime = datetime.strptime(ev['logtime'], '%Y-%m-%d %H:%M:%S')
     logtime = logtime.replace(tzinfo=tz_utc)
-    # Preserve all the properties as an XML chunk in case there are
-    # some we're not aware of here.
     prop_dump = object_to_xml_string('<?xml version="1.0"?>', "props", ev['props'])
     event_content = possible_unicode_or_none(ev['event'])
     event_subject = None
@@ -320,10 +306,11 @@ def insert_or_update_event(cur, verbose, ev):
         "raw_props": prop_dump,
     }
 
+    cur = self.cursor()
     cur.execute("SELECT itemid FROM entries WHERE itemid = :itemid", data)
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new event %s at %s: %s' % (data['itemid'], data['eventtime'], data['subject']))
         cur.execute("""
             INSERT INTO entries (
@@ -366,7 +353,7 @@ def insert_or_update_event(cur, verbose, ev):
                 :raw_props
             )""", data)
     else:
-        if verbose:
+        if self.verbose:
             print('Updating event %s at %s: %s' % (data['itemid'], data['eventtime'], data['subject']))
         cur.execute("""
             UPDATE entries SET
@@ -394,15 +381,13 @@ def insert_or_update_event(cur, verbose, ev):
 
             WHERE itemid = :itemid""", data)
 
-
-def get_all_comments(cur, verbose):
+  def get_all_comments(self):
     """ get all comments in the database
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An array of comment objects
     """
-    if verbose:
+    if self.verbose:
         print('Fetching all comments from database')
+    cur = self.cursor()
     cur.execute("""
         SELECT
             id,
@@ -418,7 +403,6 @@ def get_all_comments(cur, verbose):
     rows = cur.fetchall()
     comments = []
     for row in rows:
-        title = (row[1] or u'')
         comment = {
             "id": row[0],
             "entryid": row[1],
@@ -434,15 +418,11 @@ def get_all_comments(cur, verbose):
         comments.append(comment)
     return comments
 
-
-def insert_or_update_comment(cur, verbose, comment):
+  def insert_or_update_comment(self, comment):
     """ insert a new comment or update any preexisting one with a matching id
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param comment: comment as received from data provider
     :return: True if the comment id did not already exist
     """
-    # An instance of our custom time zone class that's fixed to UTC.
     tz_utc = fancytzutc()
 
     if comment['date'] == '':
@@ -455,10 +435,11 @@ def insert_or_update_comment(cur, verbose, comment):
         comment['date'] = commenttime.isoformat()
         comment['date_unix'] = calendar.timegm(commenttime.utctimetuple())
 
+    cur = self.cursor()
     cur.execute("SELECT id FROM comments WHERE id = :id", comment)
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new comment by %s for entry %s with ID %s' % (comment['user'], comment['entryid'], comment['id']))
         cur.execute("""
             INSERT INTO comments (
@@ -484,7 +465,7 @@ def insert_or_update_comment(cur, verbose, comment):
             )""", comment)
         return True
     else:
-        if verbose:
+        if self.verbose:
             print('Updating existing comment by %s for entry %s with ID %s' % (comment['user'], comment['entryid'], comment['id']))
         cur.execute("""
             UPDATE comments SET
@@ -503,15 +484,13 @@ def insert_or_update_comment(cur, verbose, comment):
             WHERE id = :id""", comment)
         return False
 
-
-def get_all_moods(cur, verbose):
+  def get_all_moods(self):
     """ get all moods in the database
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An array of mood objects
     """
-    if verbose:
+    if self.verbose:
         print('Fetching all moods from database')
+    cur = self.cursor()
     cur.execute("SELECT id, name, parent FROM moods")
     rows = cur.fetchall()
     moods = []
@@ -524,17 +503,15 @@ def get_all_moods(cur, verbose):
         moods.append(mood)
     return moods
 
-
-def insert_or_update_mood(cur, verbose, data):
+  def insert_or_update_mood(self, data):
     """ insert a new mood or update any preexisting mood with a matching name
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param data: mood data
     """
+    cur = self.cursor()
     cur.execute("SELECT id FROM moods WHERE id = :id", data)
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new mood with name: %s' % (data['name']))
         cur.execute("""
             INSERT INTO moods (
@@ -543,7 +520,7 @@ def insert_or_update_mood(cur, verbose, data):
                 :id, :name, :parent
             )""", data)
     else:
-        if verbose:
+        if self.verbose:
             print('Updating existing mood with name: %s' % (data['name']))
         cur.execute("""
             UPDATE moods SET
@@ -551,15 +528,13 @@ def insert_or_update_mood(cur, verbose, data):
                 parent = :parent
             WHERE id = :id""", data)
 
-
-def get_all_tags(cur, verbose):
+  def get_all_tags(self):
     """ get all tags in the database
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An array of tag objects
     """
-    if verbose:
+    if self.verbose:
         print('Fetching all tags from database')
+    cur = self.cursor()
     cur.execute("""SELECT
         name, display,
         security_private, security_protected, security_public, security_level,
@@ -579,17 +554,15 @@ def get_all_tags(cur, verbose):
         tags.append(tag)
     return tags
 
-
-def insert_or_update_tag(cur, verbose, data):
+  def insert_or_update_tag(self, data):
     """ insert a new tag or update any preexisting tag with a matching name
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param data: tag data
     """
+    cur = self.cursor()
     cur.execute("SELECT name FROM tags WHERE name = :name", data)
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new tag with name: %s' % (data['name']))
         cur.execute("""
             INSERT INTO tags (
@@ -602,7 +575,7 @@ def insert_or_update_tag(cur, verbose, data):
                 :uses
             )""", data)
     else:
-        if verbose:
+        if self.verbose:
             print('Updating existing tag with name: %s' % (data['name']))
         cur.execute("""
             UPDATE tags SET
@@ -614,15 +587,13 @@ def insert_or_update_tag(cur, verbose, data):
                 uses = :uses
             WHERE name = :name""", data)
 
-
-def get_all_icons(cur, verbose):
+  def get_all_icons(self):
     """ get all icons in the database
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An array of icon objects
     """
-    if verbose:
+    if self.verbose:
         print('Fetching all icons from database')
+    cur = self.cursor()
     cur.execute("SELECT keywords, filename, url FROM icons")
     rows = cur.fetchall()
     icons = []
@@ -635,17 +606,15 @@ def get_all_icons(cur, verbose):
         icons.append(icon)
     return icons
 
-
-def insert_or_update_icon(cur, verbose, data):
-    """ insert a new icon or update any preexisting icon with matching keyeords
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
+  def insert_or_update_icon(self, data):
+    """ insert a new icon or update any preexisting icon with matching keywords
     :param data: icon data
     """
+    cur = self.cursor()
     cur.execute("SELECT keywords FROM icons WHERE keywords = :keywords", data)
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new icon with keywords: %s' % (data['keywords']))
         cur.execute("""
             INSERT INTO icons (
@@ -654,7 +623,7 @@ def insert_or_update_icon(cur, verbose, data):
                 :keywords, :filename, :url
             )""", data)
     else:
-        if verbose:
+        if self.verbose:
             print('Updating existing icon with keywords: %s' % (data['keywords']))
         cur.execute("""
             UPDATE icons SET
@@ -662,15 +631,13 @@ def insert_or_update_icon(cur, verbose, data):
                 url = :url
             WHERE keywords = :keywords""", data)
 
-
-def get_users_map(cur, verbose):
-    """ get the curent map of user ids to users, accumulated from previous comment fetches
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
+  def get_users_map(self):
+    """ get the current map of user ids to users, accumulated from previous comment fetches
     :return: A dictionary of ids to user names
     """
-    if verbose:
+    if self.verbose:
         print('Fetching current users map from database')
+    cur = self.cursor()
     cur.execute("SELECT id, name FROM users_map")
     rows = cur.fetchall()
     users = {}
@@ -678,46 +645,42 @@ def get_users_map(cur, verbose):
         users[row[0]] = row[1]
     return users
 
-
-def insert_or_update_user_in_map(cur, verbose, id, name):
+  def insert_or_update_user_in_map(self, id, name):
     """ insert or update a cached mapping of a user id to a user name
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param id: user id
     :param name: user name
     """
     data = {'id': id, 'name': name}
+    cur = self.cursor()
     cur.execute("SELECT id FROM users_map WHERE id = :id", data)
     row = cur.fetchone()
     if not row:
-        if verbose:
+        if self.verbose:
             print('Adding new id-to-username: %s %s' % (data['id'], data['name']))
         cur.execute("""
             INSERT INTO users_map (id, name) VALUES (:id, :name)""",
             data)
     else:
-        if verbose:
+        if self.verbose:
             print('Updating existing id-to-username: %s %s' % (data['id'], data['name']))
         cur.execute("""
             UPDATE users_map SET name = :name WHERE id = :id""", data)
 
-
-def get_or_create_cached_image_record(cur, verbose, image_url, date_first_seen=None):
+  def get_or_create_cached_image_record(self, image_url, date_first_seen=None):
     """ attempt to fetch an image cache record for the given url, or create and return one if none found.
     The date_first_seen parameter is not used to uniquely identify the record and can be None.
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param image_url: url of image
     :param date_first_seen: timestamp of entry in which url was first seen (optional)
     """
+    cur = self.cursor()
     cur.execute("""
         SELECT id, url, filename, date_first_seen, date_last_attempted, cached FROM cached_images
         WHERE url = :url""", {'url': image_url})
     row = cur.fetchone()
     if row:
-        if verbose:
+        if self.verbose:
             print('Found image cache record for: %s' % (image_url))
-        image_url = {
+        return {
             "id": row[0],
             "url": row[1],
             "filename": row[2],
@@ -725,9 +688,8 @@ def get_or_create_cached_image_record(cur, verbose, image_url, date_first_seen=N
             "date_last_attempted": row[4],
             "cached": row[5]
         }
-        return image_url
     else:
-        if verbose:
+        if self.verbose:
             print('Creating image cache record for: %s' % (image_url))
         date_or_none = None
         if date_first_seen:
@@ -751,11 +713,8 @@ def get_or_create_cached_image_record(cur, verbose, image_url, date_first_seen=N
             data['id'] = row[0]
         return data
 
-
-def report_image_as_attempted(cur, verbose, image_id):
+  def report_image_as_attempted(self, image_id):
     """ update the record for an image showing that a fetch was recently attempted but failed.
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :param image_id: id of image
     """
     current_date = calendar.timegm(datetime.utcnow().utctimetuple())
@@ -763,17 +722,15 @@ def report_image_as_attempted(cur, verbose, image_id):
         "id": image_id,
         "date_last_attempted": current_date
     }
-    cur.execute("UPDATE cached_images SET date_last_attempted = :date_last_attempted WHERE id = :id", data)
+    self.cursor().execute("UPDATE cached_images SET date_last_attempted = :date_last_attempted WHERE id = :id", data)
 
-
-def report_image_as_cached(cur, verbose, image_id, filename, date_first_seen=None):
-    """ attempt to fetch an image cache record for the given url, or create and return one if none found.
-    The date_first_seen parameter is not used to uniquely identify the record and can be None.
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
+  def report_image_as_cached(self, image_id, filename, date_first_seen=None):
+    """ mark an image as successfully cached.
     :param image_id: id of image
+    :param filename: local filename of the cached image
     :param date_first_seen: timestamp of entry in which url was first seen (optional)
     """
+    date_or_none = None
     if date_first_seen:
         date_or_none = calendar.timegm(date_first_seen.utctimetuple())
     current_date = calendar.timegm(datetime.utcnow().utctimetuple())
@@ -783,9 +740,9 @@ def report_image_as_cached(cur, verbose, image_id, filename, date_first_seen=Non
         "date_first_seen": date_or_none,
         "date_last_attempted": current_date
     }
-    if verbose:
+    if self.verbose:
         print('Reporting image as cached: %s' % (filename))
-    cur.execute("""
+    self.cursor().execute("""
         UPDATE cached_images SET
             filename = :filename,
             date_first_seen = :date_first_seen,
@@ -793,15 +750,13 @@ def report_image_as_cached(cur, verbose, image_id, filename, date_first_seen=Non
             cached = 1
         WHERE id = :id""", data)
 
-
-def get_all_successfully_cached_image_records(cur, verbose):
+  def get_all_successfully_cached_image_records(self):
     """ get all records in the image cache that report they have been cached successfully
-    :param cur: database cursor
-    :param verbose: whether we are verbose logging
     :return: An array of cache records
     """
-    if verbose:
+    if self.verbose:
         print('Fetching all successfully cached images')
+    cur = self.cursor()
     cur.execute("""SELECT
         id, url, filename, date_first_seen
         FROM cached_images WHERE cached = 1""")
@@ -816,11 +771,3 @@ def get_all_successfully_cached_image_records(cur, verbose):
         }
         images.append(image)
     return images
-
-
-def set_sync_status(cur, status):
-    """ set values in the current status record
-    :param cur: database cursor
-    :param status: sync status record
-    """
-    cur.execute("UPDATE status SET lastsync = ?, lastmaxcommentid = ?", (status['last_sync'], status['last_max_comment_id']))

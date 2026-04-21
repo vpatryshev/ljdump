@@ -743,10 +743,8 @@ def ljdumptohtml(
     if verbose:
         print(f"Starting conversion for: {journal}")
 
-    cur = db.cursor()
-
-    all_entries = get_all_events(cur, verbose)
-    all_comments = get_all_comments(cur, verbose)
+    all_entries = db.get_all_events()
+    all_comments = db.get_all_comments()
 
     # Create arrays of comments by entry ID
     comments_grouped_by_entry = {}
@@ -764,13 +762,13 @@ def ljdumptohtml(
     entries_by_date = sorted(all_entries, key=lambda x: x['eventtime_unix'], reverse=False)
 
     # Fetch all user icons and sort by keyword
-    all_icons = get_all_icons(cur, verbose)
+    all_icons = db.get_all_icons()
     icons_by_keyword = {}
     for icon in all_icons:
         icons_by_keyword[icon['keywords']] = icon
 
     # Fetch mood information and turn into a dictionary
-    all_moods = get_all_moods(cur, verbose)
+    all_moods = db.get_all_moods()
     moods_by_id = {}
     for mood in all_moods:
         moods_by_id[mood['id']] = mood
@@ -801,7 +799,7 @@ def ljdumptohtml(
                         dw_hosted = dw_hosted_pattern.search(image_url)
                         url_to_cache = 'https://' + dw_hosted.group(1) + '.dreamwidth.org/file/' + dw_hosted.group(2)
 
-                    cached_image = get_or_create_cached_image_record(cur, verbose, url_to_cache, entry_date)
+                    cached_image = db.get_or_create_cached_image_record(url_to_cache, entry_date)
                     try_cache = True
                     # If a fetch was already attempted less than one day ago, don't try again
                     if cached_image['date_last_attempted']:
@@ -817,12 +815,12 @@ def ljdumptohtml(
                         img_filename = None
                         (cache_result, img_filename) = download_entry_image(url_to_cache, journal, subfolder, image_id, entry['url'], unique)
                         if (cache_result == 0) and (img_filename is not None):
-                            report_image_as_cached(cur, verbose, image_id, img_filename, entry_date)
+                            db.report_image_as_cached(image_id, img_filename, entry_date)
                             image_resolve_max -= 1
                         else:
-                            report_image_as_attempted(cur, verbose, image_id)
+                            db.report_image_as_attempted(image_id)
 
-    all_cached = get_all_successfully_cached_image_records(cur, verbose)
+    all_cached = db.get_all_successfully_cached_image_records()
     image_urls_to_filenames = {}
     for i in all_cached:
         image_urls_to_filenames[i['url']] = i['filename']
@@ -1012,7 +1010,7 @@ def ljdumptohtml(
     source = "user.png"
     dest = f"{journal.workdir}/user.png"
     shutil.copyfile(source, dest)
-    db.close(cur)
+    db.close()
 
     print("Done!")
 

@@ -47,7 +47,9 @@ class DB:
     return self.__connection.cursor()
 
   def execute(self, sql: str):
-    self.cursor().execute(sql)
+    cur = self.cursor()
+    cur.execute(sql)
+    return cur
 
   def select(self, where: str) -> list:
     #    check_sql(where)

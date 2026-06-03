@@ -18,16 +18,13 @@ class Blog:
     self.password = password
     self.server = xmlrpc.client.ServerProxy(DW_XMLRPC, allow_none=True)
 
-  def post(self, subject: str, body: str,
-           tags: str = "", security: str = "public",
-           post_date: dt.datetime = None) -> dict:
-    """Post an entry to Dreamwidth. Returns the server response dict."""
-
-    assert body, "Empty content is not allowed"
+  def _build_message(self, subject: str, body: str,
+                     tags: str, security: str,
+                     post_date: dt.datetime) -> dict:
+    """Build the XML-RPC message shared by postevent and editevent."""
     timestamp = post_date if post_date else dt.datetime.now()
     message = {
         "username": self.user,
-        "password": self.password,
         "ver": 1,
         "lineendings": "unix",
         "subject": subject,
@@ -51,10 +48,47 @@ class Blog:
     else:
       message["security"] = "public"
 
+    return message
+
+  def _auth(self) -> dict:
+    """Clear-text auth fields. Dreamwidth requires auth_method to be set
+    explicitly; sending a bare password without it is rejected (Fault 101).
+    This matches how ljdump's downloader authenticates."""
+    return {
+        "auth_method": "clear",
+        "username": self.user,
+        "password": self.password,
+    }
+
+  def post(self, subject: str, body: str,
+           tags: str = "", security: str = "public",
+           post_date: dt.datetime = None) -> dict:
+    """Post a new entry to Dreamwidth. Returns the server response dict."""
+
+    assert body, "Empty content is not allowed"
+    message = self._build_message(subject, body, tags, security, post_date)
+    message.update(self._auth())
+
     try:
       return self.server.LJ.XMLRPC.postevent(message)
     except Exception as e:
       fail(f"Error posting: {e}\n{message}")
+
+  def edit(self, itemid: int, subject: str, body: str,
+           tags: str = "", security: str = "public",
+           post_date: dt.datetime = None) -> dict:
+    """Edit an existing entry on Dreamwidth, identified by its server-side
+    itemid. Returns the server response dict."""
+
+    assert body, "Empty content is not allowed"
+    message = self._build_message(subject, body, tags, security, post_date)
+    message["itemid"] = itemid
+    message.update(self._auth())
+
+    try:
+      return self.server.LJ.XMLRPC.editevent(message)
+    except Exception as e:
+      fail(f"Error editing: {e}\n{message}")
 
   def startSession(self):
     """Log in with password and get session cookie."""

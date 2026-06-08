@@ -27,9 +27,6 @@
 
 import argparse, codecs, os, pickle, pprint, re, shutil, sys, xml.dom.minidom
 import xmlrpc.client
-from getpass import getpass
-import urllib
-from datetime import *
 from ljdumpdb import *
 from config import *
 from blog import *

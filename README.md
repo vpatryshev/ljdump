@@ -123,6 +123,74 @@ e.g.
 `dwscrape.py --config ./juan_gandhi.config kdanilov --use-archive`
 
 
+## Posting and editing entries
+
+Besides archiving, this project can push entries *back* to Dreamwidth over
+XML-RPC. The shared library `blog.py` exposes a `Blog` class with two methods:
+
+* `Blog.post(subject, body, tags, security, post_date)` → creates a new entry
+  (`LJ.XMLRPC.postevent`).
+* `Blog.edit(itemid, subject, body, tags, security, post_date)` → overwrites an
+  existing entry, identified by its server-side `itemid` (`LJ.XMLRPC.editevent`).
+
+Both authenticate with `auth_method="clear"` (plain username/password), so use
+an `https://` server URL. `security` is one of `public`, `friends`, `private`;
+passing a `post_date` posts the entry back-dated.
+
+### Post a text file — `post.py`
+
+The first line of the file is the subject, the rest is the body.
+
+```bash
+python post.py path/to/entry.txt \
+  --user USERNAME --password PASSWORD \
+  [--tags "tag1, tag2"] [--security public|friends|private] \
+  [--date 2021-11-17T09:19:00+00:00]
+```
+
+### Post entries from a dumped database — `post_from_db.py`
+
+Reads rows from a journal database under `work/` and posts them. Note that
+`--db` is resolved relative to the `work/` directory (e.g. `--db
+juan_gandhi/journal.db` reads `work/juan_gandhi/journal.db`).
+
+```bash
+# A single entry by itemid:
+python post_from_db.py --user USERNAME --password PASSWORD \
+  --db juan_gandhi/journal.db --itemid 4066 [--server https://www.dreamwidth.org] \
+  [--security public|friends|private] [--dry-run]
+
+# Or a batch, by SQL WHERE clause against the entries table:
+python post_from_db.py --user USERNAME --password PASSWORD \
+  --db juan_gandhi/journal.db --where "eventtime LIKE '2009-06%'"
+```
+
+Exactly one of `--itemid` or `--where` is required. The script throttles between
+posts and prints the resulting URL for each. `--dry-run` lists the matched
+entries without posting. Entries are posted back-dated to their original
+`eventtime`.
+
+### Update an existing entry — `update_from_db.py`
+
+Overwrites an **existing** server entry with the content of a database row, via
+`editevent`. By default the entry edited on the server is the one with the same
+itemid as the database row; use `--target-itemid` to point at a different
+server-side entry (e.g. one created fresh by `post_from_db.py` and assigned a
+new id by the server). As with `post_from_db.py`, `--db` is resolved relative to
+`work/`.
+
+```bash
+python update_from_db.py --user USERNAME --password PASSWORD \
+  --db juan_gandhi/journal.db --itemid 4066 \
+  [--target-itemid 67890] [--server https://www.dreamwidth.org] \
+  [--security public|friends|private] [--dry-run]
+```
+
+`--dry-run` prints both the database itemid and the server itemid that *would*
+be edited, so you can confirm the target before running it live. On success it
+prints `OK` and the entry's URL.
+
+
 ## Have fun!  ##
 
 You should know that there's no warranty here, and no guarantee that Dreamwidth or Livejournal won't shut off their XML-RPC protocol at some point.  Try not to aggravate them by downloading your journal a thousand times, mmmkay?

@@ -42,11 +42,11 @@ __To get the full archive of a very large journal, you may need to run the scrip
 
 If you don't have Python 3 installed, [download it from here](https://www.python.org/downloads/).  All the default settings are fine when you run the installer.
 
-Next, download ljdump [from the releases page](https://github.com/GBirkel/ljdump/releases/).  (Go for the zipfile in the "Assets" section.)  Open up the zip file on your machine and drag everything out into a new folder.  Then, the simplest way to go is to double-click `ljdump.py`, which will open a terminal window.
+Next, download ljdump [from the releases page](https://github.com/GBirkel/ljdump/releases/).  (Go for the zipfile in the "Assets" section.)  Open up the zip file on your machine and drag everything out into a new folder.  Then, the simplest way to go is to double-click `scripts/ljdump.py`, which will open a terminal window.
 
 If you want to use the image caching feature, you'll need to launch the terminal window first.  Try right-clicking in the folder where you dragged the ljdump files, and choosing "Open in Terminal".  A terminal window should open that's already pointed to that directory.  Enter the following:
 
-`./ljdump.py --cache_images`
+`./scripts/ljdump.py --cache_images`
 
 ### MacOS ###
 
@@ -54,7 +54,7 @@ Download ljdump [from the releases page](https://github.com/GBirkel/ljdump/relea
 
 Launch the Terminal app, either by typing it into Spotlight or going to the Utilities folder in Applications and opening it from there.  In the Terminal window that appears, type `cd ` (without pressing "return" yet) and then go back to your Finder window.  Drag the decompressed ljdump folder into the Terminal window.  The location of the folder in the filesystem will appear after your `cd ` command.  Press "return." The Terminal window is now pointing at that folder.
 
-Enter `./ljdump.py` (or `./ljdump.py --cache_images` if you want to cache images) and hit "return."
+Enter `./scripts/ljdump.py` (or `./scripts/ljdump.py --cache_images` if you want to cache images) and hit "return."
 
 At this point, if you haven't ever run a Python 3 script before on your machine, a window may pop up from Apple saying you need to install the developer tools, like so:
 
@@ -114,13 +114,13 @@ If image caching is on, this option will prevent the script from re-trying any i
 
 Note that you can run the script that generates the HTML by itself, skipping over the synchronization process.  Running it repeatedly will let you cache lots of images without bothering the journal servers:
 
-`./ljdumptohtml.py --cache_images`
+`./scripts/ljdumptohtml.py --cache_images`
 
 ## Scraping other people's whole blog, via `archive` page
 
-`dwscrape.py --config ./(yourid).config (yourfriendid) --use-archive`
+`scripts/dwscrape.py --config ./(yourid).config (yourfriendid) --use-archive`
 e.g.
-`dwscrape.py --config ./juan_gandhi.config kdanilov --use-archive`
+`scripts/dwscrape.py --config ./juan_gandhi.config kdanilov --use-archive`
 
 
 ## Posting and editing entries
@@ -142,13 +142,13 @@ passing a `post_date` posts the entry back-dated.
 The first line of the file is the subject, the rest is the body.
 
 ```bash
-python post.py path/to/entry.txt \
+python scripts/post.py path/to/entry.txt \
   --user USERNAME --password PASSWORD \
   [--tags "tag1, tag2"] [--security public|friends|private] \
   [--date 2021-11-17T09:19:00+00:00]
 ```
 
-### Post entries from a dumped database — `post_from_db.py`
+### Post entries from a database — `post_from_db.py`
 
 Reads rows from a journal database under `work/` and posts them. Note that
 `--db` is resolved relative to the `work/` directory (e.g. `--db
@@ -156,12 +156,12 @@ juan_gandhi/journal.db` reads `work/juan_gandhi/journal.db`).
 
 ```bash
 # A single entry by itemid:
-python post_from_db.py --user USERNAME --password PASSWORD \
+python scripts/post_from_db.py --user USERNAME --password PASSWORD \
   --db juan_gandhi/journal.db --itemid 4066 [--server https://www.dreamwidth.org] \
   [--security public|friends|private] [--dry-run]
 
 # Or a batch, by SQL WHERE clause against the entries table:
-python post_from_db.py --user USERNAME --password PASSWORD \
+python scripts/post_from_db.py --user USERNAME --password PASSWORD \
   --db juan_gandhi/journal.db --where "eventtime LIKE '2009-06%'"
 ```
 
@@ -180,7 +180,7 @@ new id by the server). As with `post_from_db.py`, `--db` is resolved relative to
 `work/`.
 
 ```bash
-python update_from_db.py --user USERNAME --password PASSWORD \
+python scripts/update_from_db.py --user USERNAME --password PASSWORD \
   --db juan_gandhi/journal.db --itemid 4066 \
   [--target-itemid 67890] [--server https://www.dreamwidth.org] \
   [--security public|friends|private] [--dry-run]

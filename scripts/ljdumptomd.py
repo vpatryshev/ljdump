@@ -35,8 +35,8 @@ import subprocess
 import re
 from utils import *
 
-# Add ljdump directory to path
-sys.path.insert(0, os.path.expanduser('~/projects/ljdump/ljdump'))
+# Add this script's directory to path so sibling modules resolve
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ljdumpdb import *
 
 

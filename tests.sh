@@ -1,2 +1,2 @@
-python3 -m unittest test_db
-python3 -m unittest test_ljdumpdb
+python3 -m unittest scripts.test_db
+python3 -m unittest scripts.test_ljdumpdb

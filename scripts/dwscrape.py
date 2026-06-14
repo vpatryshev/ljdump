@@ -30,9 +30,7 @@ from urllib.parse import urljoin, urlparse, urlencode
 from urllib.request import Request, urlopen, HTTPCookieProcessor, build_opener
 from http.cookiejar import CookieJar, Cookie
 from html.parser import HTMLParser
-from ljdumpdb import (
-    create_tables_if_missing
-)
+from ljdumpdb import LJDB
 from journal import *
 
 # Be respectful - delay between requests
@@ -984,9 +982,9 @@ class DreamwidthScraper:
             self.log("No entries to store")
             return
 
-        db = DB(db_path, self.verbose)
+        db = LJDB(db_path, self.verbose)
 
-        create_tables_if_missing(db, self.verbose)
+        db.create_tables_if_missing()
         cur = db.cursor()
 
         # Store user info

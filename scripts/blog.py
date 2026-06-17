@@ -90,6 +90,28 @@ class Blog:
     except Exception as e:
       fail(f"Error editing: {e}\n{message}")
 
+  def get(self, itemid: int, journal: str = None) -> dict:
+    """Fetch a single entry from the server by its itemid, via getevents.
+    Returns the raw event dict as the server returns it (keys include
+    'subject', 'event', 'props', ...), or None if the server has no such
+    entry. `journal` is an optional community/journal short name (usejournal)."""
+    message = {
+        "ver": 1,
+        "selecttype": "one",
+        "itemid": itemid,
+    }
+    if journal:
+      message["usejournal"] = journal
+    message.update(self._auth())
+
+    try:
+      r = self.server.LJ.XMLRPC.getevents(message)
+    except Exception as e:
+      fail(f"Error fetching itemid {itemid}: {e}")
+
+    events = r.get("events") or []
+    return events[0] if events else None
+
   def startSession(self):
     """Log in with password and get session cookie."""
     d = dict(mode = "sessiongenerate",

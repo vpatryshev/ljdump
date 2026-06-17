@@ -190,6 +190,25 @@ python scripts/update_from_db.py --user USERNAME --password PASSWORD \
 be edited, so you can confirm the target before running it live. On success it
 prints `OK` and the entry's URL.
 
+### Compare a stored entry with the live version — `compare_from_db.py`
+
+Fetches an entry from the server and compares its content (subject, tags, body)
+against the copy stored in the database. If they match it says so; if not, it
+prints a single unified diff (standard `---`/`+++`/`@@` format, with context),
+so only the changed regions show even for long entries. Line-ending differences
+are ignored. As with the scripts above, `--db` is resolved relative to `work/`.
+
+```bash
+python scripts/compare_from_db.py --user USERNAME --password PASSWORD \
+  --db juan_gandhi/journal.db --itemid 4066 \
+  [--server https://www.dreamwidth.org] [--journal community]
+```
+
+Exit status is diff-style: `0` if identical, `1` if they differ, `2` if the
+entry is missing on either side. The comparison logic is also exposed as
+`compare_entry(db, blog, itemid, journal=None)` for use from other scripts; it
+returns a result dict (`in_db`, `online`, `identical`, `differences`, `report`).
+
 
 ## Have fun!  ##
 

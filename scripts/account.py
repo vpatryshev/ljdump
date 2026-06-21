@@ -9,14 +9,19 @@ import xmlrpc.client
 import urllib.parse
 from utils import *
 
-DW_XMLRPC = "https://www.dreamwidth.org/interface/xmlrpc"
+DREAMWIDTH="https://www.dreamwidth.org"
+DW_XMLRPC = f"{DREAMWIDTH}/interface/xmlrpc"
 
-class Blog:
+class Account:
   def __init__(self, url: str, user: str, password: str):
     self.url = url
     self.user = user
     self.password = password
     self.server = xmlrpc.client.ServerProxy(DW_XMLRPC, allow_none=True)
+
+  @classmethod
+  def from_args(cls, args):
+    return cls(args.server, args.user, args.password)
 
   def _build_message(self, subject: str, body: str,
                      tags: str, security: str,

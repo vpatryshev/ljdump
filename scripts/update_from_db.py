@@ -25,15 +25,15 @@ import sys
 
 from utils import *
 from db import *
-from blog import *
+from account import *
 
 
 def main():
   ap = argparse.ArgumentParser(
     description="Update an existing Dreamwidth entry from an ljdump SQLite database"
   )
-  ap.add_argument("--server", default="https://www.dreamwidth.org",
-                  help="Server url (default: https://www.dreamwidth.org)")
+  ap.add_argument("--server", default=DREAMWIDTH,
+                  help=f"Server url (default: {DREAMWIDTH})")
   ap.add_argument("--user", required=True, help="Dreamwidth username")
   ap.add_argument("--password", required=True, help="Dreamwidth password")
   ap.add_argument("--db", required=True,
@@ -80,8 +80,8 @@ def main():
     return
 
   try:
-    blog = Blog(args.server, args.user, args.password)
-    res = blog.edit(
+    account = Account.from_args(args)
+    res = account.edit(
       itemid=target_itemid,
       subject=subject,
       body=body,

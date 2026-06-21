@@ -25,21 +25,8 @@
 #
 # Copyright (c) 2024 Garrett Birkel and contributors
 
-
-import os, codecs, pprint, argparse, shutil, xml.dom.minidom
-from getpass import getpass
-import urllib
-import html
-import re
-import calendar
-from datetime import *
-from xml.etree import ElementTree as ET
-import time
-from utils import *
-from config import *
-from db import *
-from ljdumpdb import *
 from journal import *
+from account import *
 
 MimeExtensions = {
     "image/gif": ".gif",
@@ -171,7 +158,7 @@ def render_comment_and_subcomments_containers(comment, comments_by_id, comment_c
                 'alt': '[personal profile]'})
     if comment['user']:
         a_user = ET.SubElement(span_user, 'a',
-            attrib={'href': ('https://www.dreamwidth.org/users/%s' % comment['user']),
+            attrib={'href': (f'{DREAMWIDTH}/users/%s' % comment['user']),
                     'style': 'font-weight:bold;'})
         a_user.text = comment['user']
     else:
@@ -306,7 +293,7 @@ def render_one_entry_container(journal, entry, comments_count, icons_by_keyword,
                 'style': 'vertical-align: text-bottom; border: 0; padding-right: 1px;',
                 'alt': '[personal profile]'})
     a_user = ET.SubElement(span_user, 'a',
-        attrib={'href': ('https://www.dreamwidth.org/users/%s' % journal),
+        attrib={'href': (f'{DREAMWIDTH}/users/%s' % journal),
                 'style': 'font-weight:bold;'})
     a_user.text = journal.name
 

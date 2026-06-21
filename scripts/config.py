@@ -34,7 +34,9 @@ import calendar
 from datetime import *
 import json
 import time
+from http import server
 
+from scripts.account import Account
 from utils import *
 from config import *
 
@@ -49,11 +51,9 @@ class Config:
 
 class ConfigPlain(Config):
 
-  def __init__(self, workdir, server, username, password, journals, unique, args):
+  def __init__(self, workdir, journals, unique, args):
     super().__init__(workdir, args)
-    self.server = server
-    self.username = username
-    self.password = password
+    self.account = Account.from_args(args)
     self.journals = journals
     self.unique = unique
 
@@ -64,14 +64,15 @@ class TUIConfig(Config):
     print
     default_server = "https://livejournal.com"
     self.server = input(
-      f"Alternative server to use (e.g. 'https://www.dreamwidth.org'), or hit return for '{default_server}': ") or default_server
+      f"Alternative server to use (e.g. '{DREAMWIDTH}'), or hit return for '{default_server}': ") or default_server
     print
     print("Enter your Livejournal (or Dreamwidth, etc) username.")
     print
-    self.username = raw_input("Username: ")
+    username = raw_input("Username: ")
     print
     journal = raw_input("Journal to render (or hit return to render '%s'): " % username)
     password = getpass("Password: ")
+    self.account = Account(server, username, password)
     print
     if journal:
       self.journals = [journal]
@@ -81,19 +82,20 @@ class TUIConfig(Config):
     print
 
 class ConfigFromFile(Config):
-  def __init__(self, workdir, path, args, cache_images = False):
+  def __init__(self, workdir, path, args):
     super().__init__(workdir, args)
     configpath = f"{workdir}/{path}"
     if os.path.exists(configpath):
       config = xml.dom.minidom.parse(configpath)
-      self.server = config.documentElement.getElementsByTagName("server")[0].childNodes[0].data
-      self.username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
+      server = config.documentElement.getElementsByTagName("server")[0].childNodes[0].data
+      username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
       self.journals = [e.childNodes[0].data for e in config.documentElement.getElementsByTagName("journal")]
       if not self.journals:
         self.journals = [self.username]
 
       password_els = config.documentElement.getElementsByTagName("password")
-      self.password = password_els[0].childNodes[0].data
+      password = password_els[0].childNodes[0].data
+      self.account = Account(server, username, password)
 
       # If a user is hosting images on Dreamwidth and using a config file, they will
       # put their cookie in the config file.  Asking for it every time would annoy users

@@ -31,6 +31,7 @@ from urllib.request import Request, urlopen, HTTPCookieProcessor, build_opener
 from http.cookiejar import CookieJar, Cookie
 from html.parser import HTMLParser
 from ljdumpdb import LJDB
+from account import *
 from journal import *
 
 # Be respectful - delay between requests
@@ -58,25 +59,25 @@ def load_config(config_file):
         # Get username (required)
         username_els = doc.getElementsByTagName("username")
         if username_els and username_els[0].childNodes:
-            result['username'] = username_els[0].childNodes[0].data
+            username = username_els[0].childNodes[0].data
         else:
             return None
 
         # Get password (required)
         password_els = doc.getElementsByTagName("password")
         if password_els and password_els[0].childNodes:
-            result['password'] = password_els[0].childNodes[0].data
+            password = password_els[0].childNodes[0].data
         else:
             return None
 
         # Get server (optional, defaults to dreamwidth)
         server_els = doc.getElementsByTagName("server")
         if server_els and server_els[0].childNodes:
-            result['server'] = server_els[0].childNodes[0].data
+            server = server_els[0].childNodes[0].data
         else:
-            result['server'] = 'https://www.dreamwidth.org'
+            server = DREAMWIDTH
 
-        return result
+        return Account(server, username, password)
     except Exception as e:
         print(f"Error loading config file {config_file}: {e}")
         return None
@@ -200,12 +201,12 @@ class DreamwidthHTMLParser(HTMLParser):
 class DreamwidthScraper:
     """Scrapes Dreamwidth journal entries (public and friends-only if authenticated)."""
 
-    def __init__(self, journal_name, verbose=True, username=None, password=None, db_path=None, api_key=None):
+    def __init__(self, account, verbose=True, db_path=None, api_key=None):
         self.journal_name = journal_name
         self.base_url = f"https://{journal_name}.dreamwidth.org"
         self.verbose = verbose
-        self.username = username
-        self.password = password
+        self.username = account.username
+        self.password = account.password
         self.api_key = api_key
         self.db_path = db_path
 
@@ -282,7 +283,7 @@ class DreamwidthScraper:
 
         try:
             # Step 1: Get the login page to extract lj_form_auth token
-            login_page_url = "https://www.dreamwidth.org/login"
+            login_page_url = f"{DREAMWIDTH}/login"
             req = Request(login_page_url, headers={'User-Agent': USER_AGENT})
 
             with self.opener.open(req, timeout=30) as response:
@@ -1138,12 +1139,12 @@ def main():
       os.makedirs(journal.workdir, exist_ok=True)
       db_path = f"{journal.workdir}/journal.db"
 
+    account = Account(DREAMWIDTH, username, password)
     # Create scraper and run
     scraper = DreamwidthScraper(
+        account,
         journal.name,
         verbose=verbose,
-        username=username,
-        password=password,
         db_path=db_path,
         api_key=api_key
     )

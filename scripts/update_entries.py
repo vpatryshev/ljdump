@@ -4,7 +4,7 @@
 update_entries.py — apply a sed-style regex substitution to journal entries.
 
 Usage:
-    python3 update_entries.py <journal> <where_clause> <s/old/new/[g]>
+    python3 scripts/update_entries.py <journal> <where_clause> <s/old/new/[g]>
 
 Arguments:
     journal        Journal short name; database is expected at work/<journal>/journal.db
@@ -12,7 +12,7 @@ Arguments:
     regex          Substitution in sed form: s/pattern/replacement/ or s/pattern/replacement/g
 
 Example:
-    python3 update_entries.py kdanilov "props_taglist LIKE '%music%'" "s/oldband/newband/g"
+    python3 scripts/update_entries.py kdanilov "props_taglist LIKE '%music%'" "s/oldband/newband/g"
 """
 
 import argparse

@@ -25,10 +25,10 @@ import sys
 
 from utils import *
 from db import *
-from blog import *
+from account import *
 
 
-def post(blog, entry, args):
+def post(account, entry, args):
   subject = entry["subject"] or ""
   body = entry["event"]
   tags = entry["props_taglist"] or ""
@@ -43,7 +43,7 @@ def post(blog, entry, args):
 
   try:
     post_date = dt.datetime.fromisoformat(entry["eventtime"])
-    res = blog.post(
+    res = account.post(
       subject=subject,
       body=body,
       tags=tags,
@@ -61,8 +61,8 @@ def main():
   ap = argparse.ArgumentParser(
     description="Post entries from an ljdump SQLite database to Dreamwidth"
   )
-  ap.add_argument("--server", default="https://www.dreamwidth.org",
-                  help="Server url (default: https://www.dreamwidth.org)")
+  ap.add_argument("--server", default=DREAMWIDTH,
+                  help=f"Server url (default: {DREAMWIDTH})")
   ap.add_argument("--user", required=True, help="Dreamwidth username")
   ap.add_argument("--password", required=True, help="Dreamwidth password")
   ap.add_argument("--db", required=True,
@@ -78,7 +78,7 @@ def main():
                   help="Print the entries without posting them")
   args = ap.parse_args()
 
-  blog = Blog(args.server, args.user, args.password)
+  account = Account.from_args(args)
   db = DB(f"work/{args.db}")
   if args.itemid is not None:
     entries = db.get(args.itemid)
@@ -100,7 +100,7 @@ def main():
 
     if not args.dry_run:
       throttle()
-    post(blog, entry, args)
+    post(account, entry, args)
 
 
 if __name__ == "__main__":

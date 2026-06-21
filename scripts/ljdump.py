@@ -29,7 +29,7 @@ import argparse, codecs, os, pickle, pprint, re, shutil, sys, xml.dom.minidom
 import xmlrpc.client
 from ljdumpdb import *
 from config import *
-from blog import *
+from account import *
 from db import *
 from utils import *
 from ljdumptohtml import ljdumptohtml
@@ -62,14 +62,14 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     except:
         pass
 
-    blog = Blog(journal_server, username, password)
-    session = blog.startSession()
+    account = config.account
+    session = account.startSession()
 
     server = xmlrpc.client.ServerProxy(journal_server+"/interface/xmlrpc")
 
     def authed(params):
       """Transform API call params to include authorization."""
-      return dict(auth_method='clear', username=username, password=password, **params)
+      return dict(auth_method='clear', username=account.username, password=account.password, **params)
 
     new_entry_count = 0
     new_comment_count = 0

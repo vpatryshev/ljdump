@@ -20,8 +20,13 @@ Exit status: 0 if identical, 1 if they differ, 2 if the entry is missing on
 either side (or on error).
 """
 
+import argparse
 import difflib
+import sys
+
+from utils import *
 from db import *
+from ljdumpdb import LJDB
 from account import *
 
 # Fields that make up the editable "content" of an entry, as (label, db key,
@@ -136,7 +141,12 @@ def main():
                   help="Optional community/journal short name (usejournal)")
   args = ap.parse_args()
 
-  db = DB(f"work/{args.db}")
+  db_path = f"work/{args.db}"
+  existed = os.path.isfile(db_path)
+  db = LJDB(db_path, create=True)
+  db.create_tables_if_missing()
+  if not existed:
+    print(f"Created new database: {db_path}")
   account = Account.from_args(args)
 
   result = compare_entry(db, account, args.itemid, args.journal)

@@ -30,12 +30,18 @@ from utils import *
 
 
 class DB:
-  def __init__(self, path: str, verbose=False):
+  def __init__(self, path: str, verbose=False, create=False):
     self.verbose = verbose
     self.log(f"Opening local database: {path}")
 
     if not os.path.isfile(path):
-      fail(f"Could not find the database file {Path(path).absolute()}")
+      if not create:
+        fail(f"Could not find the database file {Path(path).absolute()}")
+      # Opening with create=True: make the parent directory and let sqlite
+      # create the file. Callers should follow up with create_tables_if_missing.
+      parent = os.path.dirname(path)
+      if parent:
+        os.makedirs(parent, exist_ok=True)
 
     try:
       self.__connection = sqlite3.connect(path)

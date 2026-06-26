@@ -126,12 +126,13 @@ INDEXES = [
 ]
 
 class LJDB(DB):
-  def __init__(self, path, verbose=False):
+  def __init__(self, path, verbose=False, create=False):
     """ Livejournal/Dreamwidth database
       :param path: path to the database file
       :param verbose: whether we are verbose logging
+      :param create: create the database file if it doesn't exist
     """
-    super().__init__(path, verbose)
+    super().__init__(path, verbose, create)
 
   def create_tables_if_missing(self):
     """ create required database tables if missing

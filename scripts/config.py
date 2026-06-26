@@ -25,18 +25,9 @@
 #
 # Copyright (c) 2026-eternity Vlad Patryshev and contributors
 
-import os, codecs, pprint, argparse, shutil, xml.dom.minidom
-from getpass import getpass
-import urllib
-import html
-import re
-import calendar
-from datetime import *
-import json
-import time
-from http import server
+import xml.dom.minidom
 
-from scripts.account import Account
+from account import Account
 from utils import *
 from config import *
 
@@ -62,7 +53,7 @@ class TUIConfig(Config):
     super().__init__(".", args)
     print(f"{name} - livejournal (or Dreamwidth, etc) archive to html utility")
     print
-    default_server = "https://livejournal.com"
+    default_server = LIVEJOURNAL
     self.server = input(
       f"Alternative server to use (e.g. '{DREAMWIDTH}'), or hit return for '{default_server}': ") or default_server
     print

@@ -13,11 +13,11 @@ Features:
 
 Usage:
   # Scrape public entries only
-  ./dwscrape.py journal_name
+  scripts/dwscrape.py journal_name
 
   # Scrape with authentication (including friends-only posts)
-  ./dwscrape.py journal_name --config ljdump.config
-  ./dwscrape.py journal_name --username user --password pass
+  scripts/dwscrape.py journal_name --config ljdump.config
+  scripts/dwscrape.py journal_name --username user --password pass
 """
 
 import argparse
@@ -51,33 +51,34 @@ def load_config(config_file):
         return None
 
     try:
-        config = xml.dom.minidom.parse(config_file)
-        doc = config.documentElement
+#        config = xml.dom.minidom.parse(config_file)
+        config = ConfigFromFile(config_file)
+#        doc = config.documentElement
 
         result = {}
 
         # Get username (required)
-        username_els = doc.getElementsByTagName("username")
-        if username_els and username_els[0].childNodes:
-            username = username_els[0].childNodes[0].data
-        else:
-            return None
+#        username_els = doc.getElementsByTagName("username")
+#        if username_els and username_els[0].childNodes:
+#            username = username_els[0].childNodes[0].data
+#        else:
+#            return None
 
         # Get password (required)
-        password_els = doc.getElementsByTagName("password")
-        if password_els and password_els[0].childNodes:
-            password = password_els[0].childNodes[0].data
-        else:
-            return None
+#        password_els = doc.getElementsByTagName("password")
+#        if password_els and password_els[0].childNodes:
+#            password = password_els[0].childNodes[0].data
+#        else:
+#            return None
 
         # Get server (optional, defaults to dreamwidth)
-        server_els = doc.getElementsByTagName("server")
-        if server_els and server_els[0].childNodes:
-            server = server_els[0].childNodes[0].data
-        else:
-            server = DREAMWIDTH
+        # server_els = doc.getElementsByTagName("server")
+        # if server_els and server_els[0].childNodes:
+        #     server = server_els[0].childNodes[0].data
+        # else:
+        #     server = DREAMWIDTH
 
-        return Account(server, username, password)
+        return config.account
     except Exception as e:
         print(f"Error loading config file {config_file}: {e}")
         return None
@@ -201,11 +202,14 @@ class DreamwidthHTMLParser(HTMLParser):
 class DreamwidthScraper:
     """Scrapes Dreamwidth journal entries (public and friends-only if authenticated)."""
 
-    def __init__(self, account, verbose=True, db_path=None, api_key=None):
+    def __init__(self, account, journal_name, verbose=True, db_path=None, api_key=None):
         self.journal_name = journal_name
-        self.base_url = f"https://{journal_name}.dreamwidth.org"
+        # Dreamwidth journal subdomains map underscores in the username to
+        # hyphens (e.g. juan_gandhi -> juan-gandhi.dreamwidth.org); an
+        # underscore host doesn't match the TLS certificate.
+        self.base_url = f"https://{journal_name.replace('_', '-')}.dreamwidth.org"
         self.verbose = verbose
-        self.username = account.username
+        self.username = account.user
         self.password = account.password
         self.api_key = api_key
         self.db_path = db_path
@@ -983,7 +987,7 @@ class DreamwidthScraper:
             self.log("No entries to store")
             return
 
-        db = LJDB(db_path, self.verbose)
+        db = LJDB(db_path, self.verbose, create=True)
 
         db.create_tables_if_missing()
         cur = db.cursor()
@@ -1165,7 +1169,7 @@ def main():
         # Add BOTH ljmastersession (for web) and ljsession (for API) to jar
         cookie_names = ['ljmastersession', 'ljsession']
         for cookie_name in cookie_names:
-            for domain in ['.dreamwidth.org', 'dreamwidth.org', 'www.dreamwidth.org', f'{journal_name}.dreamwidth.org']:
+            for domain in ['.dreamwidth.org', 'dreamwidth.org', 'www.dreamwidth.org', f'{journal_name.replace("_", "-")}.dreamwidth.org']:
                 c = Cookie(
                     version=0, name=cookie_name, value=cookie,
                     port=None, port_specified=False,

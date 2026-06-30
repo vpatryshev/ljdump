@@ -53,7 +53,8 @@ def main():
   target_itemid = args.target_itemid if args.target_itemid is not None else args.itemid
 
   db = DB(f"work/{args.db}")
-  entries = db.get(args.itemid)
+  itemid = args.itemid
+  entries = db.get(itemid)
   if not entries:
     print(f"0 records found for itemid={args.itemid}")
     return
@@ -71,7 +72,7 @@ def main():
   tags = entry["props_taglist"] or ""
 
   if args.dry_run:
-    print(f"db itemid   : {entry['itemid']}")
+    print(f"db itemid   : {itemid}")
     print(f"edit itemid : {target_itemid}")
     print(f"date        : {post_date}")
     print(f"subject     : {subject}")
@@ -89,6 +90,10 @@ def main():
       security=args.security,
       post_date=post_date,
     )
+
+    cleanup_updatetime=f"update entries set updatetime=null where itemid={itemid}"
+    db.execute(cleanup_updatetime)
+
   except Exception as e:
     print(f"Error: {e}", file=sys.stderr)
     sys.exit(1)

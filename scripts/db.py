@@ -55,16 +55,14 @@ class DB:
   def execute(self, sql: str):
     cur = self.cursor()
     cur.execute(sql)
+    cur.connection.commit()
     return cur
 
   def select(self, where: str) -> list:
     #    check_sql(where)
     sql = f"SELECT itemid, subject, event, eventtime, props_taglist FROM entries WHERE {where}"
     print(sql)
-    try:
-      rows = self.execute(sql).fetchall()
-    finally:
-      self.__connection.close()
+    rows = self.execute(sql).fetchall()
 
     return [dict(r) for r in rows]
 
@@ -99,3 +97,4 @@ class DB:
       cursor.close()
     self.__connection.commit()
     self.__connection.close()
+    cursor = None

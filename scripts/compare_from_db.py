@@ -14,7 +14,11 @@ work/juan_gandhi/journal.db).
 Usage:
   python compare_from_db.py --user USERNAME --password PASSWORD \
                --db juan_gandhi/journal.db --itemid 4066 \
-               [--server https://www.dreamwidth.org] [--journal community]
+               [--server https://www.dreamwidth.org] [--journal community] \
+               [--color auto|always|never]
+
+When they differ, the differing characters are highlighted in color (database
+in blue, online in red) when writing to a terminal.
 
 Exit status: 0 if identical, 1 if they differ, 2 if the entry is missing on
 either side (or on error).
@@ -59,26 +63,98 @@ def _document(values) -> list:
           ""] + values["event"].split("\n")
 
 
-def render_diff(itemid, db_values, online_values, differences) -> str:
-  """Render a succinct, diff-style report comparing the two sides."""
+# ANSI styling. The database side is blue, the online side is red.
+_RESET = "\033[0m"
+_BOLD = "\033[1m"
+_BLUE = "\033[34m"   # database
+_RED = "\033[31m"    # online
+_CYAN = "\033[36m"   # hunk headers
+
+
+def _paint(text, code) -> str:
+  return f"{code}{text}{_RESET}" if text else text
+
+
+def _highlight_pair(a: str, b: str):
+  """Given a database line and an online line, return them with the characters
+  unique to each side wrapped in that side's color (db blue, online red).
+  Characters shared by both lines are left uncolored, so only the differing
+  characters stand out."""
+  matcher = difflib.SequenceMatcher(None, a, b, autojunk=False)
+  a_parts, b_parts = [], []
+  for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+    if tag == "equal":
+      a_parts.append(a[i1:i2])
+      b_parts.append(b[j1:j2])
+    else:
+      a_parts.append(_paint(a[i1:i2], _BLUE))
+      b_parts.append(_paint(b[j1:j2], _RED))
+  return "".join(a_parts), "".join(b_parts)
+
+
+def _colorize(diff_lines: list) -> list:
+  """Colorize a unified diff. Within each changed region, database (`-`) and
+  online (`+`) lines are paired up and only their differing characters are
+  highlighted; unpaired add/remove lines are colored whole."""
+  out = []
+  minus, plus = [], []
+
+  def flush():
+    paired = min(len(minus), len(plus))
+    for i in range(paired):
+      a_h, b_h = _highlight_pair(minus[i], plus[i])
+      out.append(_paint("-", _BLUE) + a_h)
+      out.append(_paint("+", _RED) + b_h)
+    for line in minus[paired:]:
+      out.append(_paint("-" + line, _BLUE))
+    for line in plus[paired:]:
+      out.append(_paint("+" + line, _RED))
+    minus.clear()
+    plus.clear()
+
+  for idx, line in enumerate(diff_lines):
+    if idx == 0 and line.startswith("---"):   # fromfile header
+      out.append(_paint(line, _BOLD + _BLUE))
+    elif idx == 1 and line.startswith("+++"):  # tofile header
+      out.append(_paint(line, _BOLD + _RED))
+    elif line.startswith("@@"):
+      flush()
+      out.append(_paint(line, _CYAN))
+    elif line.startswith("-"):
+      minus.append(line[1:])
+    elif line.startswith("+"):
+      plus.append(line[1:])
+    else:  # context or blank line
+      flush()
+      out.append(line)
+  flush()
+  return out
+
+
+def render_diff(itemid, db_values, online_values, differences, color=False) -> str:
+  """Render a succinct, diff-style report comparing the two sides. When `color`
+  is true, the characters that differ within each line are highlighted
+  (database in blue, online in red)."""
   if not differences:
     return f"Entry {itemid}: database and online versions are identical."
 
   fields = ", ".join(d["field"] for d in differences)
-  diff = difflib.unified_diff(
+  diff = list(difflib.unified_diff(
       _document(db_values), _document(online_values),
-      fromfile=f"database:{itemid}", tofile=f"online:{itemid}", lineterm="")
-  return "\n".join([f"database:{itemid} vs online:{itemid} — differs in {fields}",
-                    *diff])
+      fromfile=f"database:{itemid}", tofile=f"online:{itemid}", lineterm=""))
+  header = f"database:{itemid} vs online:{itemid} — differs in {fields}"
+  body = _colorize(diff) if color else diff
+  return "\n".join([header, *body])
 
 
-def compare_entry(db, account, itemid, journal=None) -> dict:
+def compare_entry(db, account, itemid, journal=None, color=False) -> dict:
   """Compare the database copy of an entry with its live online version.
 
   :param db: a DB instance (open ljdump SQLite database)
   :param account: an authenticated Account instance
   :param itemid: entry itemid (the same id is used in the DB and on the server)
   :param journal: optional community/journal short name (usejournal)
+  :param color: highlight differing characters with ANSI color in the report
   :returns: a dict with keys:
       itemid       - the itemid compared
       in_db        - bool, whether the entry exists locally
@@ -121,7 +197,7 @@ def compare_entry(db, account, itemid, journal=None) -> dict:
 
   result["identical"] = not result["differences"]
   result["report"] = render_diff(itemid, db_values, online_values,
-                                  result["differences"])
+                                  result["differences"], color=color)
   return result
 
 
@@ -139,7 +215,13 @@ def main():
                   help="Entry itemid (same id in the database and on the server)")
   ap.add_argument("--journal", default=None,
                   help="Optional community/journal short name (usejournal)")
+  ap.add_argument("--color", choices=["auto", "always", "never"], default="auto",
+                  help="Highlight differing characters in color "
+                       "(default: auto = on when output is a terminal)")
   args = ap.parse_args()
+
+  use_color = args.color == "always" or (
+      args.color == "auto" and sys.stdout.isatty())
 
   db_path = f"work/{args.db}"
   existed = os.path.isfile(db_path)
@@ -149,7 +231,7 @@ def main():
     print(f"Created new database: {db_path}")
   account = Account.from_args(args)
 
-  result = compare_entry(db, account, args.itemid, args.journal)
+  result = compare_entry(db, account, args.itemid, args.journal, color=use_color)
   print(result["report"])
 
   if not result["in_db"] or not result["online"]:

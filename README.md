@@ -195,19 +195,26 @@ prints `OK` and the entry's URL.
 Fetches an entry from the server and compares its content (subject, tags, body)
 against the copy stored in the database. If they match it says so; if not, it
 prints a single unified diff (standard `---`/`+++`/`@@` format, with context),
-so only the changed regions show even for long entries. Line-ending differences
-are ignored. As with the scripts above, `--db` is resolved relative to `work/`.
+so only the changed regions show even for long entries. When writing to a
+terminal it highlights the differing characters in color — database in blue,
+online in red — so you can spot exactly what changed within a line. Line-ending
+differences are ignored. As with the scripts above, `--db` is resolved relative
+to `work/`.
 
 ```bash
 python scripts/compare_from_db.py --user USERNAME --password PASSWORD \
   --db juan_gandhi/journal.db --itemid 4066 \
-  [--server https://www.dreamwidth.org] [--journal community]
+  [--server https://www.dreamwidth.org] [--journal community] \
+  [--color auto|always|never]
 ```
 
-Exit status is diff-style: `0` if identical, `1` if they differ, `2` if the
-entry is missing on either side. The comparison logic is also exposed as
-`compare_entry(db, blog, itemid, journal=None)` for use from other scripts; it
-returns a result dict (`in_db`, `online`, `identical`, `differences`, `report`).
+`--color` defaults to `auto` (color when stdout is a terminal); use `always` to
+keep color when piping, or `never` to disable it. Exit status is diff-style:
+`0` if identical, `1` if they differ, `2` if the entry is missing on either
+side. The comparison logic is also exposed as
+`compare_entry(db, account, itemid, journal=None, color=False)` for use from
+other scripts; it returns a result dict (`in_db`, `online`, `identical`,
+`differences`, `report`).
 
 
 ## Have fun!  ##

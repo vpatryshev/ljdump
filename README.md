@@ -170,25 +170,30 @@ posts and prints the resulting URL for each. `--dry-run` lists the matched
 entries without posting. Entries are posted back-dated to their original
 `eventtime`.
 
-### Update an existing entry — `update_from_db.py`
+### Update existing entries — `update_from_db.py`
 
-Overwrites an **existing** server entry with the content of a database row, via
-`editevent`. By default the entry edited on the server is the one with the same
-itemid as the database row; use `--target-itemid` to point at a different
+Overwrites **existing** server entries with the content of database rows, via
+`editevent`. `--itemid` takes a single itemid or a comma-separated list. By
+default the entry edited on the server is the one with the same itemid as the
+database row; use `--target-itemid` (single itemid only) to point at a different
 server-side entry (e.g. one created fresh by `post_from_db.py` and assigned a
 new id by the server). As with `post_from_db.py`, `--db` is resolved relative to
 `work/`.
 
 ```bash
 python scripts/update_from_db.py --user USERNAME --password PASSWORD \
-  --db juan_gandhi/journal.db --itemid 4066 \
+  --db juan_gandhi/journal.db --itemid 4066[,4067,...] \
   [--target-itemid 67890] [--server https://www.dreamwidth.org] \
   [--security public|friends|private] [--dry-run]
 ```
 
-`--dry-run` prints both the database itemid and the server itemid that *would*
-be edited, so you can confirm the target before running it live. On success it
-prints `OK` and the entry's URL.
+With several itemids the entries are updated in turn (throttled between them);
+an itemid that isn't in the database is reported and skipped. `--dry-run` prints
+the database itemid and the server itemid that *would* be edited for each, so
+you can confirm before running it live. On success each prints `OK` and the
+entry's URL. The per-entry logic is also exposed as
+`update_one(db, account, itemid, target_itemid=None, security="public", dry_run=False)`
+for use from other scripts.
 
 ### Compare a stored entry with the live version — `compare_from_db.py`
 

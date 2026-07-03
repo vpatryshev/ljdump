@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-dwscrape.py - Dreamwidth journal scraper
-Scrapes Dreamwidth journal entries and stores them in ljdump database format
+dwscrape.py - Dreamwidth journal fetcher
+Fetches Dreamwidth journal entries into ljdump database format, using either
+ljdump's XML-RPC incremental sync or HTTP page scraping, chosen with --method.
 
-Features:
-- Scrapes public entries without authentication
-- Supports authentication to access friends-only entries
-- Reads credentials from ljdump.config files
-- Respects robots.txt and includes delays between requests
-- Uses only standard library - no external dependencies required
+Methods (--method, default sync):
+- sync    : ljdump's XML-RPC incremental sync (your own journal; only fetches
+            what changed since the last run; needs --username/--password)
+- scrape  : HTTP pagination scraping (works for other people's public journals)
+- archive : HTTP archive-page crawl (more reliable than pagination)
 
 Usage:
-  # Scrape public entries only
-  scripts/dwscrape.py journal_name
-
-  # Scrape with authentication (including friends-only posts)
-  scripts/dwscrape.py journal_name --config ljdump.config
+  # Incremental sync of your own journal (default)
   scripts/dwscrape.py journal_name --username user --password pass
+
+  # Scrape a public journal over HTTP
+  scripts/dwscrape.py journal_name --method scrape
+  scripts/dwscrape.py journal_name --method archive
+
+  # Credentials may also come from an ljdump.config file
+  scripts/dwscrape.py journal_name --config ljdump.config
 """
 
 import argparse
@@ -1046,9 +1049,24 @@ class DreamwidthScraper:
         self.log(f"Stored {stored_count} entries in database")
 
 
+def run_sync(journal, account, verbose=True, max_to_fetch=200):
+    """Delegate to ljdump's XML-RPC incremental sync for a single journal.
+
+    Unlike scraping, this uses the official protocol and only fetches what has
+    changed since the last run (tracked in the database). Writes to the standard
+    location work/<journal>/journal.db."""
+    from types import SimpleNamespace
+    from ljdump import ljdump
+
+    # ljdump() needs config.workdir, config.account and config.unique.
+    config = SimpleNamespace(workdir="work", account=account, unique=None)
+    ljdump(config, journal.name, verbose=verbose, max_to_fetch=max_to_fetch,
+           make_pages=False, cache_images=False, retry_images=True)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='Scrape Dreamwidth journal entries (public and friends-only with authentication)'
+        description='Fetch Dreamwidth journal entries by XML-RPC sync or HTTP scraping'
     )
     parser.add_argument(
         'journal',
@@ -1096,12 +1114,25 @@ def main():
         help='Dreamwidth API key for Bearer token authentication (get from Manage Accounts → Mobile → Advanced Options)'
     )
     parser.add_argument(
+        '--method',
+        choices=['sync', 'scrape', 'archive'],
+        default='sync',
+        help="How to fetch entries (default: sync): "
+             "'sync' = ljdump's XML-RPC incremental sync (your own journal, "
+             "needs --username/--password); "
+             "'scrape' = HTTP pagination scraping; "
+             "'archive' = HTTP archive-page crawl."
+    )
+    parser.add_argument(
         '--use-archive',
         action='store_true',
-        help='Use archive-based scraping (more reliable, traverses /archive pages)'
+        help='Deprecated alias for --method archive'
     )
 
     args = parser.parse_args()
+
+    # --use-archive is kept as a backward-compatible alias for --method archive.
+    method = 'archive' if args.use_archive else args.method
 
     verbose = not args.quiet
     journal = Journal(args.journal)
@@ -1144,6 +1175,18 @@ def main():
       db_path = f"{journal.workdir}/journal.db"
 
     account = Account(DREAMWIDTH, username, password)
+
+    # 'sync' delegates to ljdump's XML-RPC incremental sync instead of scraping.
+    if method == 'sync':
+        if not (username and password):
+            fail("--method sync needs --username and --password "
+                 "(the XML-RPC sync authenticates with your account credentials)")
+        print(f"Syncing journal: {journal.name}")
+        print("Mode: XML-RPC incremental sync (ljdump)")
+        print()
+        run_sync(journal, account, verbose=verbose, max_to_fetch=args.max)
+        return
+
     # Create scraper and run
     scraper = DreamwidthScraper(
         account,
@@ -1189,13 +1232,13 @@ def main():
         print("Authentication: Disabled (public entries only)")
 
     print(f"Note: This tool includes respectful delays between requests")
-    if args.use_archive:
+    if method == 'archive':
         print("Mode: Archive-based scraping (traversing /archive pages)")
     else:
-        print("Mode: Pagination-based scraping (use --use-archive for more reliable scraping)")
+        print("Mode: Pagination-based scraping (use --method archive for more reliable scraping)")
     print()
 
-    if args.use_archive:
+    if method == 'archive':
         entries = scraper.scrape_journal_from_archive(max_entries=args.max)
     else:
         entries = scraper.scrape_journal(max_entries=args.max)

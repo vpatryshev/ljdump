@@ -39,12 +39,11 @@ def gettext(e):
         return ""
     return e[0].firstChild.nodeValue
 
-def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
+def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, cache_images=False, retry_images=True):
     journal_path = f"{config.workdir}/{journal}"
-    journal_server = config.server
-    username = config.username
-    password = config.password
-    unique = config.unique
+    account = config.account
+    journal_server = account.url
+    username = account.user
 
     m = re.search("(.*)/interface/xmlrpc", journal_server)
     if m:
@@ -62,14 +61,13 @@ def ljdump(config, journal, unique=None, verbose=True, max_to_fetch=100, make_pa
     except:
         pass
 
-    account = config.account
     session = account.startSession()
 
     server = xmlrpc.client.ServerProxy(journal_server+"/interface/xmlrpc")
 
     def authed(params):
       """Transform API call params to include authorization."""
-      return dict(auth_method='clear', username=account.username, password=account.password, **params)
+      return dict(auth_method='clear', username=account.user, password=account.password, **params)
 
     new_entry_count = 0
     new_comment_count = 0

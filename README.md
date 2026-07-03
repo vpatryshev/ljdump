@@ -116,11 +116,31 @@ Note that you can run the script that generates the HTML by itself, skipping ove
 
 `./scripts/ljdumptohtml.py --cache_images`
 
-## Scraping other people's whole blog, via `archive` page
+## Fetching a journal with `dwscrape.py`
 
-`scripts/dwscrape.py --config ./(yourid).config (yourfriendid) --use-archive`
-e.g.
-`scripts/dwscrape.py --config ./juan_gandhi.config kdanilov --use-archive`
+`dwscrape.py` fetches a journal into the ljdump database format and lets you
+pick *how*, with `--method` (default `sync`):
+
+* `sync` — ljdump's XML-RPC incremental sync (your own journal; only fetches
+  what changed since the last run; needs `--username`/`--password`). This is the
+  same engine as `ljdump.py`.
+* `scrape` — HTTP pagination scraping (works for other people's public journals,
+  which the XML-RPC sync can't reach).
+* `archive` — HTTP archive-page crawl; more reliable than plain pagination.
+
+```bash
+# Incremental sync of your own journal (default)
+scripts/dwscrape.py juan_gandhi --username juan_gandhi --password PASSWORD
+
+# Scrape someone else's public journal over HTTP
+scripts/dwscrape.py kdanilov --method scrape
+scripts/dwscrape.py kdanilov --method archive
+
+# Credentials may also come from a config file
+scripts/dwscrape.py kdanilov --config ./juan_gandhi.config --method archive
+```
+
+(`--use-archive` is still accepted as a deprecated alias for `--method archive`.)
 
 
 ## Posting and editing entries

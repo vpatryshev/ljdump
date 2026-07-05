@@ -723,7 +723,6 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
 
 def ljdumptohtml(
     config, db, journal_name, cache_images=True, retry_images=True):
-    username=config.username,
     journal = Journal(journal_name)
     unique=config.unique,
     verbose=config.verbose,

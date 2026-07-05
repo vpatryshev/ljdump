@@ -26,7 +26,7 @@
 # Copyright (c) 2026-eternity Vlad Patryshev and contributors
 
 import xml.dom.minidom
-
+import os
 from account import Account
 from utils import *
 from config import *
@@ -82,7 +82,7 @@ class ConfigFromFile(Config):
       username = config.documentElement.getElementsByTagName("username")[0].childNodes[0].data
       self.journals = [e.childNodes[0].data for e in config.documentElement.getElementsByTagName("journal")]
       if not self.journals:
-        self.journals = [self.username]
+        self.journals = [username]
 
       password_els = config.documentElement.getElementsByTagName("password")
       password = password_els[0].childNodes[0].data

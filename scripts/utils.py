@@ -49,7 +49,7 @@ def object_to_xml_string(accumulator, name, e):
     accumulator += ("<%s>\n" % name)
     for k in e.keys():
         if isinstance(e[k], {}.__class__):
-            accumulator += object_to_xml_string(f, k, e[k])
+            accumulator += object_to_xml_string("", k, e[k])
         else:
             try:
                 s = str(e[k])

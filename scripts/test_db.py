@@ -168,9 +168,8 @@ class TestDBLog(unittest.TestCase):
 
 class TestDBExecute(unittest.TestCase):
     """
-    execute() is a fire-and-forget wrapper: it returns None.
-    NOTE: Because of this, select() (which calls self.execute(sql).fetchall())
-    will raise AttributeError — see TestDBSelectBug below.
+    execute() runs the SQL, commits, and returns the cursor, so callers can
+    chain .fetchall()/.fetchone() (this is what select() relies on).
     """
 
     def setUp(self):
@@ -182,9 +181,10 @@ class TestDBExecute(unittest.TestCase):
     def tearDown(self):
         os.unlink(self._path)
 
-    def test_execute_returns_none(self):
-        result = self.db.execute("SELECT 1")
-        self.assertIsNone(result)
+    def test_execute_returns_usable_cursor(self):
+        cur = self.db.execute("SELECT itemid FROM entries ORDER BY itemid")
+        self.assertIsInstance(cur, sqlite3.Cursor)
+        self.assertEqual([r[0] for r in cur.fetchall()], [1, 2, 3])
 
     def test_execute_runs_ddl(self):
         self.db.execute("CREATE TABLE IF NOT EXISTS _tmp_test (x INTEGER)")
@@ -193,10 +193,10 @@ class TestDBExecute(unittest.TestCase):
         self.assertIsNotNone(cur.fetchone())
 
 
-class TestDBSelectBug(unittest.TestCase):
+class TestDBSelect(unittest.TestCase):
     """
-    Documents the known bug in select(): it calls self.execute(sql).fetchall(),
-    but execute() returns None, so an AttributeError is raised every time.
+    select() builds a SELECT against the entries table and returns the matching
+    rows as dicts; get() is select() by itemid.
     """
 
     def setUp(self):
@@ -211,13 +211,29 @@ class TestDBSelectBug(unittest.TestCase):
         except FileNotFoundError:
             pass
 
-    def test_select_raises_attribute_error_due_to_execute_returning_none(self):
-        with patch("builtins.print"), self.assertRaises(AttributeError):
-            self.db.select("itemid = 1")
+    def test_select_returns_matching_rows_as_dicts(self):
+        with patch("builtins.print"):
+            rows = self.db.select("itemid = 1")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["subject"], "Hello World")
+        self.assertEqual(rows[0]["props_taglist"], "tag1,tag2")
 
-    def test_get_raises_attribute_error_due_to_execute_returning_none(self):
-        with patch("builtins.print"), self.assertRaises(AttributeError):
-            self.db.get(1)
+    def test_select_returns_empty_list_when_no_match(self):
+        with patch("builtins.print"):
+            rows = self.db.select("itemid = 999")
+        self.assertEqual(rows, [])
+
+    def test_get_returns_row_by_itemid(self):
+        with patch("builtins.print"):
+            rows = self.db.get(2)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["subject"], "Second Post")
+
+    def test_get_null_subject_row(self):
+        with patch("builtins.print"):
+            rows = self.db.get(3)
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]["subject"])
 
 
 class TestDBSetSyncStatus(unittest.TestCase):

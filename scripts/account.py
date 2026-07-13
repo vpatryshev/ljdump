@@ -23,6 +23,22 @@ class Account:
   def from_args(cls, args):
     return cls(args.server, args.user, args.password)
 
+  def is_authenticated(self) -> bool:
+    if not self.user or not self.password:
+      self.log("No credentials provided, scraping without authentication")
+      return False
+    else:
+      return True
+
+  def login_data(self) -> dict:
+    return {
+      'username': self.user,
+      'password': self.password,
+      'action:login': 'Log in',
+      'remember_me': '1'
+    }
+
+
   def _build_message(self, subject: str, body: str,
                      tags: str, security: str,
                      post_date: dt.datetime) -> dict:

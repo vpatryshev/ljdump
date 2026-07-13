@@ -54,32 +54,7 @@ def load_config(config_file):
         return None
 
     try:
-#        config = xml.dom.minidom.parse(config_file)
         config = ConfigFromFile(config_file)
-#        doc = config.documentElement
-
-        result = {}
-
-        # Get username (required)
-#        username_els = doc.getElementsByTagName("username")
-#        if username_els and username_els[0].childNodes:
-#            username = username_els[0].childNodes[0].data
-#        else:
-#            return None
-
-        # Get password (required)
-#        password_els = doc.getElementsByTagName("password")
-#        if password_els and password_els[0].childNodes:
-#            password = password_els[0].childNodes[0].data
-#        else:
-#            return None
-
-        # Get server (optional, defaults to dreamwidth)
-        # server_els = doc.getElementsByTagName("server")
-        # if server_els and server_els[0].childNodes:
-        #     server = server_els[0].childNodes[0].data
-        # else:
-        #     server = DREAMWIDTH
 
         return config.account
     except Exception as e:
@@ -212,8 +187,7 @@ class DreamwidthScraper:
         # underscore host doesn't match the TLS certificate.
         self.base_url = f"https://{journal_name.replace('_', '-')}.dreamwidth.org"
         self.verbose = verbose
-        self.username = account.user
-        self.password = account.password
+        self.account = account
         self.api_key = api_key
         self.db_path = db_path
 
@@ -282,11 +256,11 @@ class DreamwidthScraper:
             self.authenticated = True
             return True
 
-        if not self.username or not self.password:
+        if not self.account.is_authenticated():
             self.log("No credentials provided, scraping without authentication")
             return False
 
-        self.log(f"Logging in as {self.username} via web login...")
+        self.log(f"Logging in as {self.account.user} via web login...")
 
         try:
             # Step 1: Get the login page to extract lj_form_auth token
@@ -304,12 +278,7 @@ class DreamwidthScraper:
                     self.log(f"Found CSRF token")
 
             # Step 2: POST login credentials
-            login_data = {
-                'user': self.username,
-                'password': self.password,
-                'action:login': 'Log in',
-                'remember_me': '1'
-            }
+            login_data = self.account.login_data()
 
             if lj_form_auth:
                 login_data['lj_form_auth'] = lj_form_auth
@@ -744,7 +713,7 @@ class DreamwidthScraper:
             List of entry data dictionaries
         """
         # Login first if credentials or API key are provided
-        if self.api_key or (self.username and self.password):
+        if self.api_key or self.account.is_authenticated():
             self.login()
 
         # Load existing entries from database
@@ -878,7 +847,7 @@ class DreamwidthScraper:
             List of entry data dictionaries
         """
         # Login first if credentials or API key are provided
-        if self.api_key or (self.username and self.password):
+        if self.api_key or self.account.is_authenticated():
             self.login()
 
         # Load existing entries from database
@@ -1072,6 +1041,12 @@ def main():
         'journal',
         help='Journal name (e.g., kdanilov)'
     )
+
+    parser.add_argument(
+        '--server', '-s',
+        default=DREAMWIDTH
+    )
+
     parser.add_argument(
         '--max',
         type=int,
@@ -1094,9 +1069,9 @@ def main():
         help='Config file with login credentials (e.g., ljdump.config)'
     )
     parser.add_argument(
-        '--username', '-u',
+        '--user', '-u',
         default=None,
-        help='Dreamwidth username for authentication'
+        help='Dreamwidth user name for authentication'
     )
     parser.add_argument(
         '--password', '-p',
@@ -1138,31 +1113,28 @@ def main():
     journal = Journal(args.journal)
 
     # Load credentials from config file or command line
-    username = args.username
-    password = args.password
+    account = Account.from_args(args)
     cookie = args.cookie
     api_key = args.api_key
 
     if args.config:
         configFileData = load_config(args.config)
         if configFileData:
-            username = username or configFileData.get('username')
-            password = password or configFileData.get('password')
+            account = configFileData.account
             if verbose:
                 print(f"Loaded credentials from {args.config}")
         else:
             print(f"Warning: Could not load config from {args.config}")
 
     # Try default config file if no credentials provided and no cookie/api_key
-    if not username and not password and not cookie and not api_key:
+    if not account.is_authenticated() and not cookie and not api_key:
       default_config = f"{journal.name}.config"
       if not os.path.exists(default_config):
         default_config = f"work/default_config"
       if os.path.exists(default_config):
         configFileData = load_config(default_config)
         if configFileData:
-          username = configFileData.get('username')
-          password = configFileData.get('password')
+          account = configFileData.account
           if verbose:
             print(f"Loaded credentials from {default_config}")
 
@@ -1173,14 +1145,11 @@ def main():
       # Create journal directory if needed
       os.makedirs(journal.workdir, exist_ok=True)
       db_path = f"{journal.workdir}/journal.db"
-
-    account = Account(DREAMWIDTH, username, password)
-
     # 'sync' delegates to ljdump's XML-RPC incremental sync instead of scraping.
     if method == 'sync':
-        if not (username and password):
+        if not account.is_authenticated():
             fail("--method sync needs --username and --password "
-                 "(the XML-RPC sync authenticates with your account credentials)")
+                 "(the XML-RPC sync authenticates with your account credentials), but the acount is not authenticated")
         print(f"Syncing journal: {journal.name}")
         print("Mode: XML-RPC incremental sync (ljdump)")
         print()
@@ -1225,8 +1194,8 @@ def main():
                 scraper.cookie_jar.set_cookie(c)
         print(f"Authentication: Using provided cookie (ljmastersession)")
         print("  → Will access friends-only entries if cookie is valid")
-    elif username:
-        print(f"Authentication: Enabled (user: {username})")
+    elif account.is_authenticated():
+        print(f"Authentication: Enabled (user: {account.user})")
         print("  → Will access friends-only entries if authorized")
     else:
         print("Authentication: Disabled (public entries only)")

@@ -172,8 +172,7 @@ def handle_images(html_content, output_dir=None):
                         f.write(img_data)
                 print(f"  Saved as: {local_filename} in {local_path}")
                 if not os.path.exists(local_path):
-                  print("ну и жопа")
-                fail("enough")
+                  fail(f"Failed to create {local_path}")
 
             # Check if the file is actually WebP (regardless of extension)
             # This works for both newly downloaded and existing files

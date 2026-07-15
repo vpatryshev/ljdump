@@ -203,6 +203,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
         except Exception as x:
             print("*** Error fetching comment meta, possibly not community maintainer?")
             print("***", x)
+            fail("Can't proceed")
     finally:
         try:
             r.close()

@@ -3,11 +3,13 @@
 """
 Update an existing Dreamwidth entry from an ljdump SQLite database.
 
-Reads one or more entries from the database (by itemid) and overwrites the
-matching entries on Dreamwidth via editevent. --itemid accepts a single itemid
-or a comma-separated list. By default the entry edited on the server is the one
-with the same itemid; use --target-itemid (single itemid only) to point at a
-different server-side entry.
+Reads one or more entries from the database and overwrites the matching entries
+on Dreamwidth via editevent. The entries to update are chosen with either
+--itemid (a single itemid or a comma-separated list) or --where (a SQL WHERE
+clause; the script resolves it to the list of matching itemids and updates
+those). By default the entry edited on the server is the one with the same
+itemid; use --target-itemid (single itemid only) to point at a different
+server-side entry.
 
 The database is read from under the "work/" directory, so --db is given
 relative to work/ (e.g. --db juan_gandhi/journal.db reads
@@ -15,7 +17,8 @@ work/juan_gandhi/journal.db).
 
 Usage:
   python update_from_db.py --user USERNAME --password PASSWORD \
-               --db juan_gandhi/journal.db --itemid 12345[,12346,...] \
+               --db juan_gandhi/journal.db \
+               (--itemid 12345[,12346,...] | --where "SQL WHERE clause") \
                [--target-itemid 67890] [--server https://www.dreamwidth.org] \
                [--security friends] [--dry-run]
 """
@@ -43,6 +46,12 @@ def parse_itemids(spec: str) -> list:
   if not ids:
     fail("No itemids given")
   return ids
+
+
+def select_itemids(db, where: str) -> list:
+  """Return the itemids of entries matching a SQL WHERE clause, sorted."""
+  rows = db.select(where)
+  return sorted(row["itemid"] for row in rows)
 
 
 def update_one(db, account, itemid, target_itemid=None,
@@ -106,9 +115,12 @@ def main():
   ap.add_argument("--password", required=True, help="Dreamwidth password")
   ap.add_argument("--db", required=True,
                   help="Path to ljdump SQLite database, relative to work/")
-  ap.add_argument("--itemid", required=True,
+  ap.add_argument("--itemid", default=None,
                   help="Entry itemid, or a comma-separated list of itemids "
                        "(source of the new content)")
+  ap.add_argument("--where", default=None,
+                  help="SQL WHERE clause selecting entries to update "
+                       "(alternative to --itemid)")
   ap.add_argument("--target-itemid", type=int, default=None,
                   help="Server-side itemid of the entry to edit; only valid "
                        "with a single --itemid (default: same as the itemid)")
@@ -119,12 +131,24 @@ def main():
                   help="Print the entries without updating them")
   args = ap.parse_args()
 
-  itemids = parse_itemids(args.itemid)
-  if args.target_itemid is not None and len(itemids) > 1:
-    fail("--target-itemid can only be used with a single --itemid")
+  if bool(args.itemid) == bool(args.where):
+    fail("Specify exactly one of --itemid or --where")
+  if args.target_itemid is not None and args.where is not None:
+    fail("--target-itemid cannot be combined with --where")
 
   db = DB(f"work/{args.db}")
   account = Account.from_args(args)
+
+  if args.where is not None:
+    itemids = select_itemids(db, args.where)
+    if not itemids:
+      print(f"0 records match: {args.where}")
+      return
+    print(f"{len(itemids)} entries match the filter")
+  else:
+    itemids = parse_itemids(args.itemid)
+    if args.target_itemid is not None and len(itemids) > 1:
+      fail("--target-itemid can only be used with a single --itemid")
 
   for i, itemid in enumerate(itemids):
     if i > 0:

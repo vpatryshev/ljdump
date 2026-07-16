@@ -193,27 +193,35 @@ entries without posting. Entries are posted back-dated to their original
 ### Update existing entries — `update_from_db.py`
 
 Overwrites **existing** server entries with the content of database rows, via
-`editevent`. `--itemid` takes a single itemid or a comma-separated list. By
-default the entry edited on the server is the one with the same itemid as the
-database row; use `--target-itemid` (single itemid only) to point at a different
+`editevent`. Choose the entries to update with either `--itemid` (a single
+itemid or a comma-separated list) or `--where` (a SQL WHERE clause against the
+entries table, which is resolved to the list of matching itemids). By default
+the entry edited on the server is the one with the same itemid as the database
+row; use `--target-itemid` (single `--itemid` only) to point at a different
 server-side entry (e.g. one created fresh by `post_from_db.py` and assigned a
 new id by the server). As with `post_from_db.py`, `--db` is resolved relative to
 `work/`.
 
 ```bash
+# By explicit itemid(s):
 python scripts/update_from_db.py --user USERNAME --password PASSWORD \
   --db juan_gandhi/journal.db --itemid 4066[,4067,...] \
   [--target-itemid 67890] [--server https://www.dreamwidth.org] \
   [--security public|friends|private] [--dry-run]
+
+# By SQL WHERE clause (updates every matching entry):
+python scripts/update_from_db.py --user USERNAME --password PASSWORD \
+  --db juan_gandhi/journal.db --where "props_taglist LIKE '%music%'" [--dry-run]
 ```
 
-With several itemids the entries are updated in turn (throttled between them);
-an itemid that isn't in the database is reported and skipped. `--dry-run` prints
-the database itemid and the server itemid that *would* be edited for each, so
-you can confirm before running it live. On success each prints `OK` and the
-entry's URL. The per-entry logic is also exposed as
-`update_one(db, account, itemid, target_itemid=None, security="public", dry_run=False)`
-for use from other scripts.
+Exactly one of `--itemid` or `--where` is required (and `--target-itemid` only
+applies to a single `--itemid`). The selected entries are updated in turn
+(throttled between them); an itemid that isn't in the database is reported and
+skipped. `--dry-run` prints the database itemid and the server itemid that
+*would* be edited for each, so you can confirm before running it live. On success
+each prints `OK` and the entry's URL. The building blocks are also exposed for
+use from other scripts: `select_itemids(db, where)` and
+`update_one(db, account, itemid, target_itemid=None, security="public", dry_run=False)`.
 
 ### Compare a stored entry with the live version — `compare_from_db.py`
 

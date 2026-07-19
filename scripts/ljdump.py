@@ -74,7 +74,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     errors = 0
 
     db_path = f"{journal_path}/journal.db"
-    db = LJDB(db_path, verbose)
+    db = LJDB(db_path, verbose, True)
 
     db.create_tables_if_missing()
 

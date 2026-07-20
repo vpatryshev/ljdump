@@ -399,6 +399,25 @@ class DreamwidthScraper:
         self.log(f"Warning: Could not parse date: {date_str}")
         return None
 
+    def extract_entry_datetime(self, html):
+        """Extract the entry's post datetime from its page HTML.
+
+        Handles both the full-month-name markup ('<a>April</a> <a>11th</a>,
+        <a>2027</a>', separated by a space) and the abbreviated markup
+        ('<a>Nov</a>. <a>29th</a>, <a>2022</a>', separated by a period). Returns
+        a datetime, or None if no entry date is found or it can't be parsed."""
+        m = re.search(
+            r'<span class="datetime">.*?<a[^>]*>([A-Za-z]+)</a>\.?\s*<a[^>]*>(\d+)(?:st|nd|rd|th)?</a>,\s*<a[^>]*>(\d{4})</a>.*?<span class="time">(\d{1,2}:\d{2}\s*(?:am|pm))</span>',
+            html,
+            re.DOTALL | re.IGNORECASE
+        )
+        if not m:
+            return None
+        month, day, year, time = m.groups()
+        date_str = f"{month} {day}, {year} {time}"
+        self.log(f"  Parsed date string: {date_str}")
+        return self.parse_date(date_str)
+
     def scrape_journal_page(self, skip=0):
         """Scrape a journal page (paginated by skip parameter).
 
@@ -523,23 +542,11 @@ class DreamwidthScraper:
         if content_match:
             entry_data['event'] = content_match.group(1).strip()
 
-        # Extract date - Dreamwidth format with linked dates
-        # Pattern: <span class="datetime"><span class="date"><a>Month</a>. <a>Day</a>, <a>Year</a></span> <span class="time">HH:MM am/pm</span>
-        datetime_match = re.search(
-            r'<span class="datetime">.*?<a[^>]*>([A-Za-z]+)</a>\.\s*<a[^>]*>(\d+)(?:st|nd|rd|th)?</a>,\s*<a[^>]*>(\d{4})</a>.*?<span class="time">(\d{1,2}:\d{2}\s*(?:am|pm))</span>',
-            html,
-            re.DOTALL | re.IGNORECASE
-        )
-        if datetime_match:
-            month, day, year, time = datetime_match.groups()
-            date_str = f"{month} {day}, {year} {time}"
-            self.log(f"  Parsed date string: {date_str}")
-            dt = self.parse_date(date_str)
-            if dt:
-                entry_data['eventtime'] = dt
-                entry_data['eventtime_unix'] = dt.timestamp()
-            else:
-                self.log(f"  Warning: Could not parse date: {date_str}")
+        # Extract the entry's post date/time.
+        dt = self.extract_entry_datetime(html)
+        if dt:
+            entry_data['eventtime'] = dt
+            entry_data['eventtime_unix'] = dt.timestamp()
 
         # Extract tags - look for tag links
         tag_matches = re.findall(r'<a[^>]+href="[^"]*tag=[^"]*"[^>]*>([^<]+)</a>', html)

@@ -142,6 +142,23 @@ scripts/dwscrape.py kdanilov --config ./juan_gandhi.config --method archive
 
 (`--use-archive` is still accepted as a deprecated alias for `--method archive`.)
 
+By default `scrape` fetches the **whole** journal (no entry limit), skipping any
+entries already stored in the database, so re-running it backfills without
+re-scraping what you have. Options:
+
+* `--max N` — stop after N new entries (default: no limit).
+* `--incremental` — stop as soon as several consecutive listing pages are all
+  already in the database (fast routine updates once the journal is fully
+  archived; may miss older, not-yet-scraped entries, so use a full run first).
+
+```bash
+# Full scrape of a large journal (gets everything, skipping duplicates)
+scripts/dwscrape.py taki-net --method scrape --user USER --password PASS
+
+# Quick update once already archived
+scripts/dwscrape.py taki-net --method scrape --incremental --user USER --password PASS
+```
+
 
 ## Posting and editing entries
 

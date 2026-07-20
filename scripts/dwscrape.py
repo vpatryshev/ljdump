@@ -844,15 +844,21 @@ class DreamwidthScraper:
         self.log(f"Total: {new_entries_count} new entries, {skipped_count} skipped")
         return all_entries
 
-    def scrape_journal(self, max_entries):
-        """Scrape all entries from a journal.
+    def scrape_journal(self, max_entries=None, incremental=False):
+        """Scrape entries from a journal, skipping ones already in the database.
 
         Args:
-            max_entries: Maximum number of entries to scrape (None for all)
+            max_entries: Maximum number of new entries to scrape (None = no limit)
+            incremental: If True, stop once we hit CAUGHT_UP_PAGES consecutive
+                pages whose entries are all already stored (fast routine update).
+                If False (default), traverse the whole journal to the end so
+                nothing is missed, still skipping already-stored entries.
 
         Returns:
             List of entry data dictionaries
         """
+        # How many consecutive all-existing pages mean "caught up" (incremental).
+        CAUGHT_UP_PAGES = 3
         # Login first if credentials or API key are provided
         if self.api_key or self.account.is_authenticated():
             self.login()
@@ -867,7 +873,6 @@ class DreamwidthScraper:
         skipped_count = 0
         consecutive_empty_pages = 0
         consecutive_all_exist_pages = 0
-        max_pages = (max_entries + entries_per_page - 1) / entries_per_page  # Stop after 3 pages where everything exists
 
         while True:
             # Fetch journal page with entry metadata
@@ -938,16 +943,17 @@ class DreamwidthScraper:
                 latest = max(page_dates).strftime('%Y-%m-%d')
                 self.log(f"Page date range: {earliest} to {latest}")
 
-            # Track consecutive pages where all entries exist
+            # Track consecutive pages where all entries already exist.
             if page_new_count == 0 and page_existing_count > 0:
                 consecutive_all_exist_pages += 1
                 self.log(f"Page summary: ALL {page_existing_count} entries exist (consecutive all-exist pages: {consecutive_all_exist_pages})")
 
-                # Only stop after multiple consecutive pages with all existing
-                # This allows us to continue past gaps in the data
-                if consecutive_all_exist_pages >= max_pages:
-                    self.log(f"\n*** Found {consecutive_all_exist_pages} consecutive pages with all existing entries - stopping ***")
-                    self.log("This indicates we've fully caught up with existing data")
+                # In incremental mode, stop once we've seen enough consecutive
+                # all-existing pages (we've caught up with what's new). Without
+                # --incremental we keep going to the end so older entries that
+                # aren't in the database yet still get scraped.
+                if incremental and consecutive_all_exist_pages >= CAUGHT_UP_PAGES:
+                    self.log(f"\n*** {consecutive_all_exist_pages} consecutive pages already in the database - caught up, stopping (incremental) ***")
                     break
             else:
                 # Reset counter when we find new entries
@@ -1057,8 +1063,17 @@ def main():
     parser.add_argument(
         '--max',
         type=int,
-        default=200,
-        help='Maximum number of entries to scrape'
+        default=None,
+        help='Maximum number of new entries to scrape (default: no limit, '
+             'scrape the whole journal)'
+    )
+    parser.add_argument(
+        '--incremental',
+        action='store_true',
+        help='Stop once we reach entries already in the database (faster for '
+             'routine updates). Off by default, so the whole journal is '
+             'traversed, skipping entries already stored. Applies to --method '
+             'scrape.'
     )
     parser.add_argument(
         '--quiet', '-q',
@@ -1217,7 +1232,8 @@ def main():
     if method == 'archive':
         entries = scraper.scrape_journal_from_archive(max_entries=args.max)
     else:
-        entries = scraper.scrape_journal(max_entries=args.max)
+        entries = scraper.scrape_journal(max_entries=args.max,
+                                         incremental=args.incremental)
 
     print(f"\n{'='*60}")
     print(f"Scraping complete!")

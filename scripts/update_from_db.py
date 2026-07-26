@@ -101,7 +101,9 @@ def update_one(db, account, itemid, target_itemid=None,
       security=security,
       post_date=post_date,
   )
-  db.execute(f"update entries set updatetime=null where itemid={itemid}")
+  if res is None:
+    db.clear_update_time(itemid)
+
   return res
 
 

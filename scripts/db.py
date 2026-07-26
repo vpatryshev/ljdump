@@ -32,38 +32,43 @@ from utils import *
 class DB:
   def __init__(self, path: str, verbose=False, create=False):
     self.verbose = verbose
-    self.log(f"Opening local database: {path}")
+    parent = os.path.dirname(path)
 
     if not os.path.isfile(path):
       if not create:
         fail(f"Could not find the database file {Path(path).absolute()}")
       # Opening with create=True: make the parent directory and let sqlite
       # create the file. Callers should follow up with create_tables_if_missing.
-      parent = os.path.dirname(path)
       if parent:
         os.makedirs(parent, exist_ok=True)
+
+    self.logfile = open(f"{parent}/db.log", "a", encoding="utf-8")
+    self.logfile.write(f"========== {path} ===========\n")
 
     try:
       self.__connection = sqlite3.connect(path)
       self.__connection.row_factory = sqlite3.Row
     except Error as e:
+      self.log(f"Failed to connect to database: {e}\n")
       fail(f"Failed to connect to db: {e}")
+
+  def log(self, message):
+    self.logfile.write(f"{dt.datetime.now()}: {message}\n")
+    self.logfile.flush()
 
   def cursor(self):
     return self.__connection.cursor()
 
   def execute(self, sql: str):
+    self.log(f" {sql}")
     cur = self.cursor()
     cur.execute(sql)
     cur.connection.commit()
     return cur
 
   def select(self, where: str) -> list:
-    #    check_sql(where)
     sql = f"SELECT itemid, subject, event, eventtime, props_taglist FROM entries WHERE {where}"
-    print(sql)
     rows = self.execute(sql).fetchall()
-
     return [dict(r) for r in rows]
 
   def get(self, itemid: int) -> list:
@@ -71,15 +76,12 @@ class DB:
 
   # Check if entries table exists
   def exists(self):
-    cur = self.cursor()
-
-    cur.execute(
+    cur = self.execute(self,
       "SELECT name FROM sqlite_master WHERE type='table' AND name='entries'")
     return cur.fetchone()
 
-  def log(self, message):
-    if self.verbose:
-      print(message)
+  def clear_update_time(self, itemid: int):
+    self.execute(f"update entries set updatetime=null where itemid={itemid}")
 
   def set_sync_status(self, status):
     """ set values in the current status record
@@ -92,7 +94,7 @@ class DB:
   def close(self, cursor = None):
     """ commit and close the cursor and database
     :param cursor: database cursor
-    """
+`    """
     if cursor != None:
       cursor.close()
     self.__connection.commit()

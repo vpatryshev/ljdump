@@ -8,6 +8,7 @@ import datetime as dt
 import xmlrpc.client
 import urllib.parse
 from utils import *
+from xmlrpc.client import ProtocolError
 
 DREAMWIDTH="https://www.dreamwidth.org"
 DW_XMLRPC = f"{DREAMWIDTH}/interface/xmlrpc"
@@ -85,13 +86,13 @@ class Account:
            tags: str = "", security: str = "public",
            post_date: dt.datetime = None) -> dict:
     """Post a new entry to Dreamwidth. Returns the server response dict."""
-
     assert body, "Empty content is not allowed"
     message = self._build_message(subject, body, tags, security, post_date)
     message.update(self._auth())
-
     try:
       return self.server.LJ.XMLRPC.postevent(message)
+    except ProtocolError as pe:
+      print(f"Protocol error, may want to retry: {pe}", file=sys.stderr)
     except Exception as e:
       fail(f"Error posting: {e}\n{message}")
 
@@ -110,6 +111,7 @@ class Account:
       return self.server.LJ.XMLRPC.editevent(message)
     except Exception as e:
       fail(f"Error editing: {e}\n{message}")
+
 
   def get(self, itemid: int, journal: str = None) -> dict:
     """Fetch a single entry from the server by its itemid, via getevents.

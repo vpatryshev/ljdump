@@ -32,17 +32,18 @@ def post(account, entry, args):
   subject = entry["subject"] or ""
   body = entry["event"]
   tags = entry["props_taglist"] or ""
+  post_date = dt.datetime.fromisoformat(entry["eventtime"])
 
   if args.dry_run:
     print(f"itemid  : {entry['itemid']}")
     print(f"date    : {entry['eventtime']}")
+    print(f"postdate: {post_date}")
     print(f"subject : {subject}")
     print(f"tags    : {tags}")
     print(f"security: {args.security}")
     return
 
   try:
-    post_date = dt.datetime.fromisoformat(entry["eventtime"])
     res = account.post(
       subject=subject,
       body=body,
@@ -94,13 +95,16 @@ def main():
   print(f"Found {len(entries)} records")
   for i, entry_data in enumerate(entries):
     entry = dict(entry_data)
-    print(f"{i}). #{entry['itemid']}, {entry['eventtime']}, "
+    itemid = entry['itemid']
+    print(f"{i}). #{itemid}, {entry['eventtime']}, "
           f"{entry['subject']}, {entry['props_taglist']}, "
           f"{len(entry['event'])} bytes")
 
     if not args.dry_run:
       throttle()
-    post(account, entry, args)
+    res = post(account, entry, args)
+    if (res is None):
+      db.clear_update_time(itemid)
 
 
 if __name__ == "__main__":

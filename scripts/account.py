@@ -112,12 +112,43 @@ class Account:
     except Exception as e:
       fail(f"Error editing: {e}\n{message}")
 
+  MAX_DELAY = 90
+  INCREASE = 1.732
+
+  def retry(self, name, operation, delay = 10.2):
+    try:
+      r = operation()
+      print(f"did {name} got {r}")
+      return r
+    except Exception as e:
+      print(f"Failure in {name}: {e}, next in {int(delay)} seconds")
+      throttle(delay)
+
+      if (delay > self.MAX_DELAY):
+        raise e
+
+      return self.retry(name, operation, delay * self.INCREASE)
+
+
+  def authed(self, params):
+    """Transform API call params to include authorization."""
+    return dict(auth_method='clear', username=self.user, password=self.password, **params)
+
 
   def get(self, itemid: int, journal: str = None) -> dict:
     """Fetch a single entry from the server by its itemid, via getevents.
     Returns the raw event dict as the server returns it (keys include
     'subject', 'event', 'props', ...), or None if the server has no such
     entry. `journal` is an optional community/journal short name (usejournal)."""
+
+    # e = server.LJ.XMLRPC.getevents(authed({
+    #     'ver': 1,
+    #     'selecttype': "one",
+    #     'itemid': itemid,
+    #     'usejournal': journal,
+    # }))
+
+
     message = {
         "ver": 1,
         "selecttype": "one",
@@ -125,10 +156,12 @@ class Account:
     }
     if journal:
       message["usejournal"] = journal
-    message.update(self._auth())
+
+#    message.update(self._auth())
 
     try:
-      r = self.server.LJ.XMLRPC.getevents(message)
+      authedMsg = self.authed(message)
+      r = self.retry(f"get({itemid})", lambda: self.server.LJ.XMLRPC.getevents(authedMsg))
     except Exception as e:
       fail(f"Error fetching itemid {itemid}: {e}")
 
@@ -143,7 +176,9 @@ class Account:
              auth_method = "clear"
     )
     data = urllib.parse.urlencode(d).encode("utf-8")
-    r = urllib.request.urlopen(self.url+"/interface/flat", data=data)
+    r = self.retry("start session",
+                   lambda: urllib.request.urlopen(self.url+"/interface/flat", data=data))
+    print(r)
     response = {}
     while True:
       name = r.readline()

@@ -80,31 +80,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
 
     sync_status = db.get_sync_status_or_defaults("", 0)
 
-    #
-    # Entries (events)
-    #
-
     original_last_sync = sync_status['last_sync']
-
-    # The following code doesn't work because the server rejects our repeated calls.
-    # https://www.livejournal.com/doc/server/ljp.csp.xml-rpc.getevents.html
-    # contains the statement "You should use the syncitems selecttype in
-    # conjuntions [sic] with the syncitems protocol mode", but provides
-    # no other explanation about how these two function calls should
-    # interact. Therefore we just do the above slow one-at-a-time method.
-    #
-    #    r = server.LJ.XMLRPC.getevents(authed({
-    #        'ver': 1,
-    #        'selecttype': "syncitems",
-    #        'lastsync': lastsync,
-    #    }))
-
-    # For testing purposes:
-    #r = server.LJ.XMLRPC.getdaycounts(authed({
-    #    'ver': 1,
-    #}))
-    #pprint.pprint(r)
-    #os._exit(os.EX_OK)
 
     try:
       # There is apparently no support for fetching pages here, so repeated calls
@@ -117,7 +93,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
         'usejournal': journal,
       }))
     except xmlrpc.client.ProtocolError as x:
-      fail(f"Failed synching, last sync={sync_status['last_sync']}")
+      fail(f"Failed synching, last sync={sync_status['last_sync']}\n{x}")
 
     if verbose:
       print("Sync items to process: %s out of %s returned." % (min(max_to_fetch, len(r['syncitems'])), len(r['syncitems'])))
@@ -127,29 +103,13 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
 
         if verbose:
             print(f"{dt.datetime.now()} Fetching journal entry {item['item']} ({item['action']})")
+        throttle()
+        itemid = item['item'][2:]
+
         try:
-          throttle()
-          e = server.LJ.XMLRPC.getevents(authed({
-              'ver': 1,
-              'selecttype': "one",
-              'itemid': item['item'][2:],
-              'usejournal': journal,
-          }))
-          if e['events']:
-            ev = e['events'][0]
+          ev = account.get(itemid, journal)
+          if ev is not None:
             new_entry_count += 1
-
-            # Process the event
-
-            # Wanna do a bulk replace of something in your entire journal? This is how.
-            #ev['event'] = re.sub('http://(edu.|staff.|)mmcs.sfedu.ru/~ulysses',
-            #                     'https://a-pelenitsyn.github.io/Files',
-            #                     str(ev['event']))
-            # Write modified event to server
-            #d = datetime.strptime(ev['eventtime'], '%Y-%m-%d %H:%M:%S')
-            #ev1 = dict(lineendings="pc", year=d.year, mon=d.month, day=d.day,
-            #          hour=d.hour, min=d.minute, **ev)
-            #r1 = server.LJ.XMLRPC.editevent(authed(ev1))
 
             db.insert_or_update_event(ev)
 

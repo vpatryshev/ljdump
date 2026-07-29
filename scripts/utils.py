@@ -42,8 +42,8 @@ def fail(message):
   print(f"\n❌ {message}", file=sys.stderr)
   exit(1)
 
-def throttle():
-  time.sleep(6)
+def throttle(delay = 6):
+  time.sleep(int(delay))
 
 def object_to_xml_string(accumulator, name, e):
     accumulator += ("<%s>\n" % name)

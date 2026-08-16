@@ -29,7 +29,10 @@ import xml.dom.minidom
 import os
 from account import Account
 from utils import *
-from config import *
+
+# DREAMWIDTH, LIVEJOURNAL and DW_XMLRPC now live in utils (imported via the
+# `from utils import *` above) so account.py and config.py don't import each
+# other.
 
 class Config:
   def __init__(self, workdir, args):
@@ -107,4 +110,5 @@ def setup(config_file, args):
   elif os.access(f"work/{config_file}", os.F_OK):
     return ConfigFromFile("work", config_file, args)
   else:
+    print(f"Config file {config_file} not found, using your input")
     return TUIConfig("ljdump", args)

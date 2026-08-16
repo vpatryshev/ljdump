@@ -151,14 +151,18 @@ class LJDB(DB):
     :param last_sync: default lastsync value
     :param last_max_comment_id: default lastmaxcommentid value
     """
-    cur = self.cursor()
-    cur.execute("SELECT lastsync, lastmaxcommentid FROM status")
+    # Read from the cursor that ran the query. Order by lastsync so that, even
+    # if the table has picked up junk rows in the past, we get the row with the
+    # most-recent sync point rather than an empty one.
+    cur = self.execute("SELECT lastsync, lastmaxcommentid FROM status "
+                       "ORDER BY lastsync DESC LIMIT 1")
     row = cur.fetchone()
     if not row:
-        cur.execute("INSERT INTO status (lastsync, lastmaxcommentid) VALUES (?, ?)", (last_sync, last_max_comment_id))
+        self.execute("INSERT INTO status (lastsync, lastmaxcommentid) VALUES (?, ?)", (last_sync, last_max_comment_id))
     else:
         last_sync = row[0]
         last_max_comment_id = row[1]
+
     return {"last_sync": last_sync, "last_max_comment_id": last_max_comment_id}
 
   def get_user_info(self):
@@ -167,8 +171,7 @@ class LJDB(DB):
     """
     if self.verbose:
         print('Fetching user info from database')
-    cur = self.cursor()
-    cur.execute("SELECT journal_short_name, defaultpicurl, fullname, userid FROM user LIMIT 1")
+    cur = self.execute("SELECT journal_short_name, defaultpicurl, fullname, userid FROM user LIMIT 1")
     row = cur.fetchone()
     if not row:
         return None

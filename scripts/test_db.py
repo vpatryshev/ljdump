@@ -72,26 +72,17 @@ class TestDBInit(unittest.TestCase):
         with patch("builtins.print"), self.assertRaises(SystemExit):
             DB("/nonexistent/path/no_such_file.db")
 
-    def test_verbose_logs_opening_message(self, ):
+    def test_opening_writes_header_to_logfile(self):
+        # Opening a DB writes a header line (with the db path) to db.log in the
+        # same directory.
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             path = f.name
+        logpath = os.path.join(os.path.dirname(path), "db.log")
         try:
             _make_db(path)
-            with patch("builtins.print") as mock_print:
-                DB(path, verbose=True)
-                printed = " ".join(str(c) for c in mock_print.call_args_list)
-                self.assertIn("Opening local database", printed)
-        finally:
-            os.unlink(path)
-
-    def test_no_verbose_no_log(self):
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            path = f.name
-        try:
-            _make_db(path)
-            with patch("builtins.print") as mock_print:
-                DB(path, verbose=False)
-                mock_print.assert_not_called()
+            DB(path)
+            with open(logpath, encoding="utf-8") as lf:
+                self.assertIn(path, lf.read())
         finally:
             os.unlink(path)
 
@@ -148,22 +139,16 @@ class TestDBLog(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             self._path = f.name
         _make_db(self._path)
+        self._logpath = os.path.join(os.path.dirname(self._path), "db.log")
 
     def tearDown(self):
         os.unlink(self._path)
 
-    def test_log_prints_when_verbose(self):
-        with patch("builtins.print") as mock_print:
-            db = DB(self._path, verbose=True)
-            mock_print.reset_mock()
-            db.log("test message")
-            mock_print.assert_called_once_with("test message")
-
-    def test_log_silent_when_not_verbose(self):
-        db = DB(self._path, verbose=False)
-        with patch("builtins.print") as mock_print:
-            db.log("test message")
-            mock_print.assert_not_called()
+    def test_log_writes_message_to_logfile(self):
+        db = DB(self._path)
+        db.log("test-log-marker-123")
+        with open(self._logpath, encoding="utf-8") as lf:
+            self.assertIn("test-log-marker-123", lf.read())
 
 
 class TestDBExecute(unittest.TestCase):

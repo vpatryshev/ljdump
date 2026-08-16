@@ -292,7 +292,7 @@ def filter_entries(entries, tags=None, start_date=None, end_date=None):
             for tag in tags:
                 if tag in entry_tags:
                     has_matching_tag = True
-                    print(f"{entry['itemid']}@{entry_date} is good")
+#                    print(f"{entry['itemid']}@{entry_date} is good")
 
                     break
 
@@ -330,14 +330,17 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
     # Filter entries
     filtered_entries = filter_entries(entries_by_date, tag_list, start_date, end_date)
 
-
     if verbose:
-        print(f"Found {len(all_entries)} total entries")
-        print(f"After filtering: {len(filtered_entries)} entries")
-        if tag_list:
-            print(f"Filtering by tags: {', '.join(tag_list)}")
+        print(f"Out of {len(all_entries)} entries in total")
         if start_date or end_date:
             print(f"Date range: {start_date} to {end_date}")
+        if tag_list:
+            print(f"Filtered by tags: {', '.join(tag_list)}")
+
+        print(f"After filtering: {len(filtered_entries)} entries")
+
+    print(f"Found {len(filtered_entries)} entries with {tag_list}.")
+
 
     # Create output directory
     output_dir = f"{journal_short_name}/markdown"
@@ -362,7 +365,7 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
 
         # Create filename with date and itemid
         filename = f"{entry_date.strftime('%Y-%m-%d')}_{entry['itemid']}.md"
-        print(f"entry at {entry_date} -> {filename}")
+        print(f"entry at {entry_date} -> {filename}", end="\r")
         filepath = os.path.join(output_dir, filename)
 
         # Generate markdown content

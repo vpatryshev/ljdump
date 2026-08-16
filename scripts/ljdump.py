@@ -93,7 +93,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
         'usejournal': journal,
       }))
     except xmlrpc.client.ProtocolError as x:
-      fail(f"Failed synching, last sync={sync_status['last_sync']}\n{x}")
+      fail(f"Failed syncing, last sync={sync_status['last_sync']}\n{x}")
 
     if verbose:
       print("Sync items to process: %s out of %s returned." % (min(max_to_fetch, len(r['syncitems'])), len(r['syncitems'])))
@@ -110,7 +110,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
           ev = account.get(itemid, journal)
           if ev is not None:
             new_entry_count += 1
-
+            print(f"got {ev['eventtime']}, {ev['url']}")
             db.insert_or_update_event(ev)
 
             if new_entry_count > max_to_fetch:

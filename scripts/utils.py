@@ -31,6 +31,12 @@ import time
 import xmlrpc.client
 from xml.sax import saxutils
 
+# Server constants. Kept in utils (the base module) so both account.py and
+# config.py can use them without importing each other (avoids a circular import).
+DREAMWIDTH = "https://www.dreamwidth.org"
+LIVEJOURNAL = "https://www.livejournal"
+DW_XMLRPC = f"{DREAMWIDTH}/interface/xmlrpc"
+
 MimeExtensions = {
     "image/gif": ".gif",
     "image/jpeg": ".jpg",
@@ -39,7 +45,7 @@ MimeExtensions = {
 
 def fail(message):
   """Fail with a message."""
-  print(f"\n❌ {message}", file=sys.stderr)
+  print(f"\n\n❌ {message}", file=sys.stderr)
   exit(1)
 
 def throttle(delay = 6):

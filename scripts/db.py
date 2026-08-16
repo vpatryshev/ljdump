@@ -42,13 +42,13 @@ class DB:
       if parent:
         os.makedirs(parent, exist_ok=True)
 
-    self.logfile = open(f"{parent}/db.log", "a", encoding="utf-8")
+    self.logfile = open(os.path.join(parent or ".", "db.log"), "a", encoding="utf-8")
     self.logfile.write(f"========== {path} ===========\n")
 
     try:
       self.__connection = sqlite3.connect(path)
       self.__connection.row_factory = sqlite3.Row
-    except Error as e:
+    except sqlite3.Error as e:
       self.log(f"Failed to connect to database: {e}\n")
       fail(f"Failed to connect to db: {e}")
 
@@ -59,10 +59,10 @@ class DB:
   def cursor(self):
     return self.__connection.cursor()
 
-  def execute(self, sql: str):
-    self.log(f" {sql}")
+  def execute(self, *args, **kwargs) -> list:
+    self.log(f" {args[0]}")
     cur = self.cursor()
-    cur.execute(sql)
+    cur.execute(*args)
     cur.connection.commit()
     return cur
 
@@ -76,7 +76,7 @@ class DB:
 
   # Check if entries table exists
   def exists(self):
-    cur = self.execute(self,
+    cur = self.execute(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='entries'")
     return cur.fetchone()
 
@@ -84,12 +84,15 @@ class DB:
     self.execute(f"update entries set updatetime=null where itemid={itemid}")
 
   def set_sync_status(self, status):
-    """ set values in the current status record
-    :param cur: database cursor
+    """ store the sync status as the single row in the status table
     :param status: sync status record
     """
-    self.cursor().execute("UPDATE status SET lastsync = ?, lastmaxcommentid = ?",
-                          (status['last_sync'], status['last_max_comment_id']))
+    cur = self.cursor()
+    # Collapse to exactly one row (also cleans up any stray rows from earlier).
+    cur.execute("DELETE FROM status")
+    cur.execute("INSERT INTO status (lastsync, lastmaxcommentid) VALUES (?, ?)",
+                (status['last_sync'], status['last_max_comment_id']))
+    cur.connection.commit()
 
   def close(self, cursor = None):
     """ commit and close the cursor and database

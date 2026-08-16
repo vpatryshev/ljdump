@@ -153,6 +153,52 @@ class TestGetSyncStatusOrDefaults(unittest.TestCase):
         self.assertEqual(status["last_sync"], "2023-06-01")
         self.assertEqual(status["last_max_comment_id"], 99)
 
+    def test_returns_latest_when_multiple_rows_present(self):
+        # Regression: a broken read used to leave stray empty status rows and
+        # always report an empty sync point (causing a full re-sync every run).
+        # get() must return the row with the real (latest) sync point.
+        conn = sqlite3.connect(self.path)
+        conn.execute("INSERT INTO status VALUES ('2025-05-05 10:00:00', 500)")
+        conn.execute("INSERT INTO status VALUES ('', 0)")
+        conn.execute("INSERT INTO status VALUES ('', 0)")
+        conn.commit()
+        conn.close()
+        status = self.db.get_sync_status_or_defaults("ignored", -1)
+        self.assertEqual(status["last_sync"], "2025-05-05 10:00:00")
+        self.assertEqual(status["last_max_comment_id"], 500)
+
+
+class TestSetSyncStatus(unittest.TestCase):
+    def setUp(self):
+        self.db, self.path = _make_ljdb()
+
+    def tearDown(self):
+        self.db.close(None)
+        os.unlink(self.path)
+
+    def test_set_then_get_roundtrip(self):
+        # The core of the sync bug: after storing a sync point, reading it back
+        # must return that value (not defaults), so the next run is incremental.
+        self.db.set_sync_status({"last_sync": "2025-07-01 00:00:00",
+                                 "last_max_comment_id": 42})
+        status = self.db.get_sync_status_or_defaults("x", -1)
+        self.assertEqual(status["last_sync"], "2025-07-01 00:00:00")
+        self.assertEqual(status["last_max_comment_id"], 42)
+
+    def test_collapses_to_single_row(self):
+        conn = sqlite3.connect(self.path)
+        conn.execute("INSERT INTO status VALUES ('', 0)")
+        conn.execute("INSERT INTO status VALUES ('', 0)")
+        conn.commit()
+        conn.close()
+        self.db.set_sync_status({"last_sync": "2025-07-01 00:00:00",
+                                 "last_max_comment_id": 42})
+        cur = self.db.cursor()
+        cur.execute("SELECT lastsync, lastmaxcommentid FROM status")
+        rows = cur.fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0][0], rows[0][1]), ("2025-07-01 00:00:00", 42))
+
 
 class TestUserInfo(unittest.TestCase):
     def setUp(self):

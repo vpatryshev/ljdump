@@ -10,9 +10,6 @@ import urllib.parse
 from utils import *
 from xmlrpc.client import ProtocolError
 
-DREAMWIDTH="https://www.dreamwidth.org"
-DW_XMLRPC = f"{DREAMWIDTH}/interface/xmlrpc"
-
 class Account:
   def __init__(self, url: str, user: str, password: str):
     self.url = url
@@ -90,7 +87,7 @@ class Account:
     message = self._build_message(subject, body, tags, security, post_date)
     message.update(self._auth())
     try:
-      return self.server.LJ.XMLRPC.postevent(message)
+      self.retry(f"Post {subject}", lambda: self.server.LJ.XMLRPC.posevent(message))
     except ProtocolError as pe:
       print(f"Protocol error, may want to retry: {pe}", file=sys.stderr)
     except Exception as e:
@@ -108,26 +105,30 @@ class Account:
     message.update(self._auth())
 
     try:
-      return self.server.LJ.XMLRPC.editevent(message)
+      self.retry(f"Update #{itemid}", lambda: self.server.LJ.XMLRPC.editevent(message))
     except Exception as e:
       fail(f"Error editing: {e}\n{message}")
 
-  MAX_DELAY = 90
-  INCREASE = 1.732
+  MIN_DELAY = 6
+  MAX_DELAY = 12000
+  DELAY_RATIO = 1.4142
+  delay = MIN_DELAY
 
-  def retry(self, name, operation, delay = 10.2):
+  def retry(self, name, operation):
     try:
+      print(f"{datetime.now()}: {name}")
       r = operation()
-      print(f"did {name} got {r}")
+      self.delay = max(self.MIN_DELAY, self.delay / self.DELAY_RATIO)
       return r
     except Exception as e:
-      print(f"Failure in {name}: {e}, next in {int(delay)} seconds")
-      throttle(delay)
+      print(f"Failure in {name}: {str(e)}, retry in {int(self.delay)} seconds")
+      throttle(self.delay)
 
-      if (delay > self.MAX_DELAY):
+      self.delay = self.delay * self.DELAY_RATIO
+      if (self.delay > self.MAX_DELAY):
         raise e
 
-      return self.retry(name, operation, delay * self.INCREASE)
+      return self.retry(name, operation)
 
 
   def authed(self, params):
@@ -157,8 +158,6 @@ class Account:
     if journal:
       message["usejournal"] = journal
 
-#    message.update(self._auth())
-
     try:
       authedMsg = self.authed(message)
       r = self.retry(f"get({itemid})", lambda: self.server.LJ.XMLRPC.getevents(authedMsg))
@@ -178,7 +177,6 @@ class Account:
     data = urllib.parse.urlencode(d).encode("utf-8")
     r = self.retry("start session",
                    lambda: urllib.request.urlopen(self.url+"/interface/flat", data=data))
-    print(r)
     response = {}
     while True:
       name = r.readline()

@@ -153,11 +153,6 @@ def main():
       fail("--target-itemid can only be used with a single --itemid")
 
   for i, itemid in enumerate(itemids):
-    if i > 0:
-      print()
-      if not args.dry_run:
-        throttle()
-
     res = update_one(db, account, itemid,
                      target_itemid=args.target_itemid,
                      security=args.security, dry_run=args.dry_run)

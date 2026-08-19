@@ -57,9 +57,13 @@ def main():
         help="Show what would change without writing to the database")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
-
+    regex = args.regex
+    sql = f"SELECT itemid, event FROM entries WHERE {args.where_clause}"
+    if args.verbose:
+        print(f"Query: {sql}")
+        print(f"Regex: {regex} from {args.regex}")
     try:
-        pattern, replacement, count = parse_sed(args.regex)
+        pattern, replacement, count = parse_sed(re.escape(regex))
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -68,9 +72,6 @@ def main():
     db = LJDB(db_path, verbose=args.verbose)
 
     cur = db.cursor()
-    sql = f"SELECT itemid, event FROM entries WHERE {args.where_clause}"
-    if args.verbose:
-        print(f"Query: {sql}")
     cur.execute(sql)
     rows = cur.fetchall()
 

@@ -87,11 +87,12 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
       # to this will fetch overlapping lists of events (which can be quite long)
       # as we catch up to the present.  If getevents syncitems (above) worked properly
       # we could avoid this.
-      r = server.LJ.XMLRPC.syncitems(authed({
-        'ver': 1,
-        'lastsync': sync_status['last_sync'],
-        'usejournal': journal,
-      }))
+      r = account.retry(f"Synchronizing with {journal}", lambda:
+           server.LJ.XMLRPC.syncitems(authed({
+                'ver': 1,
+                'lastsync': sync_status['last_sync'],
+                'usejournal': journal,
+           })))
     except xmlrpc.client.ProtocolError as x:
       fail(f"Failed syncing, last sync={sync_status['last_sync']}\n{x}")
 

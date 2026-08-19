@@ -7,7 +7,7 @@ Reads one or more entries from the database and overwrites the matching entries
 on Dreamwidth via editevent. The entries to update are chosen with either
 --itemid (a single itemid or a comma-separated list) or --where (a SQL WHERE
 clause; the script resolves it to the list of matching itemids and updates
-those). By default the entry edited on the server is the one with the same
+those). By default, the entry edited on the server is the one with the same
 itemid; use --target-itemid (single itemid only) to point at a different
 server-side entry.
 

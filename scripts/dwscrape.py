@@ -974,7 +974,6 @@ class DreamwidthScraper:
 
         db = LJDB(db_path, self.verbose, create=True)
 
-        db.create_tables_if_missing()
         cur = db.cursor()
 
         # Store user info

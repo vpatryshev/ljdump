@@ -73,10 +73,8 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     new_comment_count = 0
     errors = 0
 
-    db_path = f"{journal_path}/journal.db"
+    db_path = account.dbpath() # f"{journal_path}/journal.db"
     db = LJDB(db_path, verbose, True)
-
-    db.create_tables_if_missing()
 
     sync_status = db.get_sync_status_or_defaults("", 0)
 

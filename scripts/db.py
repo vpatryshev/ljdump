@@ -38,9 +38,11 @@ class DB:
       if not create:
         fail(f"Could not find the database file {Path(path).absolute()}")
       # Opening with create=True: make the parent directory and let sqlite
-      # create the file. Callers should follow up with create_tables_if_missing.
+      # create the file.
       if parent:
         os.makedirs(parent, exist_ok=True)
+
+      print(f"Created new database: {path}")
 
     self.logfile = open(os.path.join(parent or ".", "db.log"), "a", encoding="utf-8")
     self.logfile.write(f"========== {path} ===========\n")

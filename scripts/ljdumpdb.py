@@ -132,7 +132,10 @@ class LJDB(DB):
       :param verbose: whether we are verbose logging
       :param create: create the database file if it doesn't exist
     """
+
     super().__init__(path, verbose, create)
+
+    self.create_tables_if_missing()
 
   def create_tables_if_missing(self):
     """ create required database tables if missing

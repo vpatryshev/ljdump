@@ -224,11 +224,7 @@ def main():
       args.color == "auto" and sys.stdout.isatty())
 
   db_path = f"work/{args.db}"
-  existed = os.path.isfile(db_path)
   db = LJDB(db_path, create=True)
-  db.create_tables_if_missing()
-  if not existed:
-    print(f"Created new database: {db_path}")
   account = Account.from_args(args)
 
   result = compare_entry(db, account, args.itemid, args.journal, color=use_color)

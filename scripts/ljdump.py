@@ -152,14 +152,15 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
 
     new_max_comment_id = max_comment_id
     url = "/export_comments.bml?get=comment_meta&startid=%d&numitems=%d%s" % (new_max_comment_id+1, max_to_fetch, authas)
+    request = urllib.request.Request(
+        journal_server + url,
+        headers = {'Cookie': "ljsession="+session}
+    )
     try:
         try:
-            r = urllib.request.urlopen(
-                    urllib.request.Request(
-                        journal_server + url,
-                        headers = {'Cookie': "ljsession="+session}
-                    )
-                )
+            r = account.retry(
+                f"export comments",
+                lambda: urllib.request.urlopen(request))
             meta = xml.dom.minidom.parse(r)
         except Exception as x:
             print("*** Error fetching comment meta, possibly not community maintainer?")

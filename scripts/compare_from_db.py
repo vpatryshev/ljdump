@@ -209,8 +209,9 @@ def main():
                   help=f"Server url (default: {DREAMWIDTH}")
   ap.add_argument("--user", required=True, help="Dreamwidth username")
   ap.add_argument("--password", required=True, help="Dreamwidth password")
+  ap.add_argument("--verbose", default=False, help="Talk a lot about the process")
   ap.add_argument("--db", required=True,
-                  help="Path to ljdump SQLite database, relative to work/")
+                  help="ljdump SQLite database name, could be the same as username")
   ap.add_argument("--itemid", required=True, type=int,
                   help="Entry itemid (same id in the database and on the server)")
   ap.add_argument("--journal", default=None,

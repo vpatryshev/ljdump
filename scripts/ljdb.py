@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 #
-# ljdumpdb.py - SQLite support tools for livejournal/dreamwidth archiver
+# ljdb.py - SQLite support tools for livejournal/dreamwidth archiver
 # Version 2.0
 #
 # LICENSE
@@ -28,6 +28,8 @@ from datetime import *
 import calendar
 from db import *
 from utils import *
+from pathlib import Path
+import re
 
 TABLES = [
   """status (
@@ -126,6 +128,30 @@ INDEXES = [
 ]
 
 class LJDB(DB):
+
+  def find(work_directory, journal, server = None):
+    pattern = r"\w+\.\w+"
+    match = re.search(pattern, server)
+
+    if match:
+      domain = match.group()
+      print(f"found {server}? {match}, domain={domain}")
+      longname =  f"{work_directory}/{journal}.{domain}"
+      path = longname if (os.path.exists(longname)) else f"{work_directory}/{journal}"
+      return f"{path}/journal.db" if os.path.isdir(path) else fail(f"no such directory: {path}")
+    #
+    #
+    #   # Output: #94827
+    # paths = [f for f in Path(work_directory).rglob(f"{journal}*")
+    #          if f.is_dir() and (f.name == journal or f.name == f"{journal}.{domain}")]
+    # fail(f"{paths} for {server}")
+    # # shortpath = os.path.join(work_directory, journal)
+    # # if server == None:
+    # #   return shortpath
+    # # else:
+    # #   longpath = os.path.join(work_directory, journal)
+    # #   return longpath if (os.path.exists(longpath)) else shortpath
+
   def __init__(self, path, verbose=False, create=False):
     """ Livejournal/Dreamwidth database
       :param path: path to the database file

@@ -30,7 +30,7 @@ import sys
 
 from utils import *
 from db import *
-from ljdumpdb import LJDB
+from ljdb import LJDB
 from account import *
 
 # Fields that make up the editable "content" of an entry, as (label, db key,

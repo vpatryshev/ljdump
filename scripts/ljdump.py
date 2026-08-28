@@ -27,7 +27,7 @@
 
 import argparse, codecs, os, pickle, pprint, re, shutil, sys, xml.dom.minidom
 import xmlrpc.client
-from ljdumpdb import *
+from ljdb import *
 from config import *
 from account import *
 from db import *
@@ -73,7 +73,8 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     new_comment_count = 0
     errors = 0
 
-    db_path = account.dbpath() # f"{journal_path}/journal.db"
+    db_path = LJDB.find("work", journal, journal_server)
+
     db = LJDB(db_path, verbose, True)
 
     sync_status = db.get_sync_status_or_defaults("", 0)

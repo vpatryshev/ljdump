@@ -34,7 +34,7 @@ from xml.sax import saxutils
 # Server constants. Kept in utils (the base module) so both account.py and
 # config.py can use them without importing each other (avoids a circular import).
 DREAMWIDTH = "https://www.dreamwidth.org"
-LIVEJOURNAL = "https://www.livejournal"
+LIVEJOURNAL = "https://www.livejournal.com"
 DW_XMLRPC = f"{DREAMWIDTH}/interface/xmlrpc"
 
 MimeExtensions = {

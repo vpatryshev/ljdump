@@ -37,7 +37,7 @@ from utils import *
 
 # Add this script's directory to path so sibling modules resolve
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ljdumpdb import *
+from ljdb import *
 
 
 def write_markdown(filename, markdown_content):

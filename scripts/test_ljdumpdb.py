@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Test suite for LJDB class in ljdumpdb.py
+Test suite for LJDB class in ljdb.py
 """
 
 import os
@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from ljdumpdb import LJDB, TABLES, INDEXES
+from ljdb import LJDB, TABLES, INDEXES
 
 
 # ---------------------------------------------------------------------------

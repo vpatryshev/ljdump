@@ -33,7 +33,7 @@ from urllib.parse import urljoin, urlparse, urlencode
 from urllib.request import Request, urlopen, HTTPCookieProcessor, build_opener
 from http.cookiejar import CookieJar, Cookie
 from html.parser import HTMLParser
-from ljdumpdb import LJDB
+from ljdb import LJDB
 from account import *
 from journal import *
 

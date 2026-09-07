@@ -7,6 +7,7 @@ import calendar
 from datetime import *
 import json
 import time
+from utils import fail
 
 MimeExtensions = {
     "image/gif": ".gif",

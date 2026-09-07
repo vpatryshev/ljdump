@@ -11,7 +11,7 @@ import unittest
 import xmlrpc.client
 
 # Ensure the scripts directory is on the path so imports resolve
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import compare_from_db as c
 

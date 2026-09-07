@@ -74,7 +74,6 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     errors = 0
 
     db_path = LJDB.find("work", journal, journal_server)
-
     db = LJDB(db_path, verbose, True)
 
     sync_status = db.get_sync_status_or_defaults("", 0)

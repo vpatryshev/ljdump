@@ -12,7 +12,7 @@ import sys
 import unittest
 
 # Ensure the scripts directory is on the path so `from account import ...` resolves
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from account import Account
 

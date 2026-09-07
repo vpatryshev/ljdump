@@ -5,6 +5,23 @@ import os
 import glob
 import re
 
+# Map of LaTeX special characters to their escaped forms. Applied in a single
+# pass (see below) so that characters inserted by one replacement (e.g. the
+# braces in \textbackslash{}) are never re-escaped by a later one.
+_LATEX_MAP = {
+    '\\': r'\textbackslash{}',
+    '&': r'\&',
+    '%': r'\%',
+    '$': r'\$',
+    '#': r'\#',
+    '_': r'\_',
+    '{': r'\{',
+    '}': r'\}',
+    '~': r'\textasciitilde{}',
+    '^': r'\textasciicircum{}',
+}
+_LATEX_RE = re.compile('|'.join(re.escape(c) for c in _LATEX_MAP))
+
 def escape_latex_in_text(text):
     """
     Escape special LaTeX characters, but be smart about it.
@@ -33,22 +50,10 @@ def escape_latex_in_text(text):
     # Save inline code (`...`)
     text = re.sub(r'`[^`]+`', save_inline_code, text)
 
-    # Now escape LaTeX special characters in the remaining text
-    replacements = [
-        ('\\', r'\\textbackslash{}'),  # Must be first
-        ('&', r'\&'),
-        ('%', r'\%'),
-        ('$', r'\$'),
-        ('#', r'\#'),
-        ('_', r'\_'),
-        ('{', r'\{'),
-        ('}', r'\}'),
-        ('~', r'\textasciitilde{}'),
-        ('^', r'\textasciicircum{}'),
-    ]
-
-    for char, escaped in replacements:
-        text = text.replace(char, escaped)
+    # Now escape LaTeX special characters in the remaining text. A single
+    # regex pass replaces each original character exactly once, so escape
+    # sequences we insert are not themselves re-escaped.
+    text = _LATEX_RE.sub(lambda m: _LATEX_MAP[m.group(0)], text)
 
     # Restore code blocks
     for i, code in enumerate(code_blocks):

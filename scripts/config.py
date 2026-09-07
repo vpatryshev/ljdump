@@ -27,6 +27,7 @@
 
 import xml.dom.minidom
 import os
+from getpass import getpass
 from account import Account
 from utils import *
 
@@ -62,11 +63,11 @@ class TUIConfig(Config):
     print
     print("Enter your Livejournal (or Dreamwidth, etc) username.")
     print
-    username = raw_input("Username: ")
+    username = input("Username: ")
     print
-    journal = raw_input("Journal to render (or hit return to render '%s'): " % username)
+    journal = input("Journal to render (or hit return to render '%s'): " % username)
     password = getpass("Password: ")
-    self.account = Account(server, username, password)
+    self.account = Account(self.server, username, password)
     print
     if journal:
       self.journals = [journal]

@@ -10,7 +10,7 @@ import unittest
 import xmlrpc.client
 
 # Ensure the scripts directory is on the path so `from utils import ...` resolves
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import possible_unicode_or_none, object_to_xml_string
 

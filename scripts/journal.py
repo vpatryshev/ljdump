@@ -45,9 +45,11 @@ class Journal:
     self.name = name
     self.workdir = f"work/{self.name}"
 
-  def write_text(self, filename, content, timestamp = time.time()):
+  def write_text(self, filename, content, timestamp = None):
+    if timestamp is None:
+      timestamp = time.time()
     path = f"{self.workdir}/{filename}"
-    f = codecs.open(path, "w", "UTF-8")
-    f.write(content)
+    with codecs.open(path, "w", "UTF-8") as f:
+      f.write(content)
     os.utime(path, (timestamp, timestamp))
 

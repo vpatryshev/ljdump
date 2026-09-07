@@ -12,7 +12,7 @@ import sys
 import unittest
 
 # Ensure the scripts directory is on the path so imports resolve
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from account import Account
 from dwscrape import DreamwidthScraper

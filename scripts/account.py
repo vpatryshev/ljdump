@@ -176,7 +176,7 @@ class Account:
     )
     data = urllib.parse.urlencode(d).encode("utf-8")
     r = self.retry("start session",
-                   lambda: urllib.request.urlopen(self.url+"/interface/flat", data=data))
+                   lambda: urllib.request.urlopen(self.url+"/interface/flat", data=data, timeout=SOCKET_TIMEOUT))
     response = {}
     while True:
       name = r.readline()

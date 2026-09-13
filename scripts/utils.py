@@ -26,10 +26,20 @@
 # Copyright (c) 2005-2026 Greg Hewgill, Vlad Patryshev and contributors
 
 import sys
+import socket
 from datetime import *
 import time
 import xmlrpc.client
 from xml.sax import saxutils
+
+# Seconds of inactivity before a socket read/connect gives up. Without this,
+# a server that accepts the connection but stops sending data makes urllib and
+# XML-RPC block forever (see the comment-body fetch in ljdump.py). Applying it
+# as the global default covers XML-RPC's ServerProxy too, which has no timeout
+# parameter of its own. It is an *inactivity* timeout, not a total-time budget,
+# so it is safe for large transfers: it only fires when the socket goes quiet.
+SOCKET_TIMEOUT = 120
+socket.setdefaulttimeout(SOCKET_TIMEOUT)
 
 # Server constants. Kept in utils (the base module) so both account.py and
 # config.py can use them without importing each other (avoids a circular import).

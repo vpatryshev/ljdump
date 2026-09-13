@@ -5,3 +5,4 @@
 # Extra args are forwarded to unittest (e.g. ./tests.sh -v).
 cd "$(dirname "$0")"
 python3 -m unittest discover -s scripts/tests -t scripts/tests -p "test_*.py" "$@"
+``

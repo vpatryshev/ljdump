@@ -27,6 +27,7 @@
 
 from journal import *
 from account import *
+from ljdb import LJDB
 
 # MimeExtensions is defined once in utils.py and reaches us via the star imports.
 
@@ -616,6 +617,8 @@ def create_table_of_contents_page(journal, entry_count, entries_table_of_content
     entries_toc_banner.text = 'All Entries By Month'
 
     for toc_group in entries_table_of_contents:
+        if not toc_group:  # empty journal (or empty month group): nothing to list
+            continue
         month_banner = ET.SubElement(content, 'h4')
         month_banner.text = html.escape(toc_group[0]['date'].strftime("%Y %B"))
         month_ul = ET.SubElement(content, 'ul')
@@ -685,10 +688,10 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
             filename = "%s/%s-%s%s" % (subfolder, image_id, filename, extension)
 
             # Make sure our cache folder and subfolder exist (creates images/ too)
-            os.makedirs(f"{journal.name}/images/{subfolder}", exist_ok=True)
+            os.makedirs(f"{journal.workdir}/images/{subfolder}", exist_ok=True)
 
             # Copy the file stream directly into the file
-            with open(f"{journal.name}/images/{filename}", "wb") as pic_file:
+            with open(f"{journal.workdir}/images/{filename}", "wb") as pic_file:
                 shutil.copyfileobj(image_req, pic_file)
         return (0, filename)
     except urllib.error.HTTPError as e:
@@ -773,7 +776,7 @@ def ljdumptohtml(
                     if cached_image['date_last_attempted']:
                         # Respect the global image cache setting
                         try_cache = retry_images
-                        current_date = int(calendar.timegm(datetime.utcnow().utctimetuple()))
+                        current_date = int(calendar.timegm(datetime.now(timezone.utc).utctimetuple()))
                         if int(current_date) - int(cached_image['date_last_attempted']) < 86400:
                             try_cache = False
                     # If we already have an image cached for this URL, skip it.
@@ -801,7 +804,7 @@ def ljdumptohtml(
 
     print("Rendering %s entry pages..." % (len(entries_by_date)))
 
-    os.makedirs(f"{journal.name}/entries", exist_ok=True)
+    os.makedirs(f"{journal.workdir}/entries", exist_ok=True)
 
     entries_table_of_contents = []
     current_month_group = []
@@ -875,7 +878,7 @@ def ljdumptohtml(
 
     print("Rendering %s history pages..." % (len(groups_of_twenty)))
 
-    os.makedirs(f"{journal.name}/history", exist_ok=True)
+    os.makedirs(f"{journal.workdir}/history", exist_ok=True)
 
     history_page_table_of_contents = []
     for i in range(0, len(groups_of_twenty)):
@@ -991,7 +994,7 @@ if __name__ == "__main__":
         journal = Journal(journal_name)
         ljdumptohtml(
             config,
-            f"{journal.workdir}/journal.db",
+            LJDB(f"{journal.workdir}/journal.db", args.verbose),
             journal_name=journal_name,
             cache_images=args.cache_images,
             retry_images=args.retry_images

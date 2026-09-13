@@ -15,9 +15,10 @@ Covers the pure, importable HTML-generation helpers:
   - create_uncached_images_report_page (count banner, per-entry url count)
   - download_entry_image          (network mocked; success, non-image, HTTP/URL errors)
 
-The top-level orchestrator ljdumptohtml() and the __main__ argparse block are not
-covered here: they are glue that requires a live DB, filesystem writes, and network
-access, and are not pure/importable in a unit-test-friendly form.
+The top-level orchestrator ljdumptohtml() is covered by an end-to-end
+characterization test (TestLjdumptohtmlOrchestrator) that runs it against a real
+temporary LJDB in a temporary working directory with image caching disabled (no
+network). The __main__ argparse block is not covered.
 """
 
 import os
@@ -34,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ljdumptohtml import (
     Journal,
+    ljdumptohtml,
     create_template_page,
     render_comment_and_subcomments_containers,
     render_comments_section,
@@ -45,6 +47,7 @@ from ljdumptohtml import (
     create_uncached_images_report_page,
     download_entry_image,
 )
+from ljdb import LJDB
 
 
 # ---------------------------------------------------------------------------
@@ -508,7 +511,7 @@ class TestDownloadEntryImage(unittest.TestCase):
         self.prev_cwd = os.getcwd()
         os.chdir(self.tmpdir)
         self.journal = Journal("J")
-        os.makedirs("J", exist_ok=True)
+        os.makedirs(self.journal.workdir, exist_ok=True)
 
     def tearDown(self):
         os.chdir(self.prev_cwd)
@@ -534,7 +537,7 @@ class TestDownloadEntryImage(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIsNotNone(filename)
         self.assertTrue(filename.endswith(".png"))
-        self.assertTrue(os.path.exists(os.path.join("J", "images", filename)))
+        self.assertTrue(os.path.exists(os.path.join(self.journal.workdir, "images", filename)))
 
     def test_non_image_content_skipped(self):
         resp = self._make_response(maintype="text", content_type="text/html")
@@ -572,6 +575,110 @@ class TestDownloadEntryImage(unittest.TestCase):
                 "http://x.com/pic.png", self.journal, "2024-03", 1, None, None)
         self.assertEqual(code, 1)
         self.assertIsNone(filename)
+
+
+# ---------------------------------------------------------------------------
+# ljdumptohtml  (end-to-end orchestrator, real temp DB, no network)
+# ---------------------------------------------------------------------------
+
+def _make_event(itemid=1, subject="Hello", event="Body text",
+                eventtime="2024-03-15 10:00:00", logtime="2024-03-15 10:01:00",
+                taglist="music, life", url="https://example.com/1"):
+    """Minimal valid event dict, matching what the server/LJDB expects."""
+    return {
+        "itemid": itemid, "anum": itemid * 256,
+        "eventtime": eventtime, "logtime": logtime,
+        "subject": subject, "event": event, "url": url,
+        "props": {"taglist": taglist, "current_music": "Song",
+                  "commentalter": None, "current_moodid": None,
+                  "import_source": None, "interface": "web",
+                  "opt_backdated": None, "picture_keyword": None,
+                  "picture_mapid": None},
+    }
+
+
+def _make_comment(id=1, entryid=1, date="2024-03-15T11:00:00Z", user="reader",
+                  subject="Re: Hello", body="Nice post", parentid="0",
+                  posterid="42", state="S"):
+    return {"id": id, "entryid": entryid, "date": date, "parentid": parentid,
+            "posterid": posterid, "user": user, "subject": subject,
+            "body": body, "state": state}
+
+
+class TestLjdumptohtmlOrchestrator(unittest.TestCase):
+    """Drive the whole ljdumptohtml() pipeline against a real temp LJDB.
+
+    Regression guard for two bugs this path had: (1) it wrote entry/history
+    pages under journal.workdir while creating the directories under
+    journal.name, so from a repo-root cwd the writes landed in a directory that
+    was never created; (2) the standalone entry point passed a db *path string*
+    where a db *object* was required.
+    """
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.prev_cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        # Support files the orchestrator copies into the journal folder at the end.
+        with open("stylesheet.css", "w") as f:
+            f.write("/* css */")
+        with open("user.png", "wb") as f:
+            f.write(b"\x89PNG")
+        self.journal = Journal("myjournal")
+        os.makedirs(self.journal.workdir, exist_ok=True)
+        self.db = LJDB(f"{self.journal.workdir}/journal.db", verbose=False,
+                       create=True)
+        self.config = type("Cfg", (), {"unique": None, "verbose": False})()
+
+    def tearDown(self):
+        os.chdir(self.prev_cwd)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _run(self):
+        with patch("builtins.print"):
+            ljdumptohtml(self.config, self.db, "myjournal", cache_images=False)
+
+    def test_generates_expected_files_and_content(self):
+        self.db.insert_or_update_event(
+            _make_event(itemid=1, subject="First Post", event="Hello world"))
+        self.db.insert_or_update_event(
+            _make_event(itemid=2, subject="Second Post", event="More text",
+                        eventtime="2024-04-20 09:00:00",
+                        logtime="2024-04-20 09:01:00", taglist="life"))
+        self.db.insert_or_update_comment(
+            _make_comment(id=1, entryid=1, body="Great first post"))
+
+        self._run()
+
+        wd = self.journal.workdir
+        # Core pages land under journal.workdir (the write/makedirs bug).
+        for rel in ("index.html", "uncached_images_report.html",
+                    "entries/entry-1.html", "entries/entry-2.html",
+                    "history/page-1.html", "stylesheet.css", "user.png"):
+            self.assertTrue(os.path.exists(os.path.join(wd, rel)),
+                            f"expected {rel} under {wd}")
+
+        with open(os.path.join(wd, "entries", "entry-1.html")) as f:
+            entry1 = f.read()
+        self.assertIn("First Post", entry1)
+        self.assertIn("Hello world", entry1)
+        self.assertIn("Great first post", entry1)  # comment rendered
+
+        with open(os.path.join(wd, "index.html")) as f:
+            toc = f.read()
+        self.assertIn("First Post", toc)
+        self.assertIn("Second Post", toc)
+        # Tags from both entries appear in the by-tag section of the TOC.
+        self.assertIn("music", toc)
+        self.assertIn("life", toc)
+
+    def test_empty_journal_still_writes_toc(self):
+        # No entries at all: the pipeline should still produce a TOC/index.
+        self._run()
+        wd = self.journal.workdir
+        self.assertTrue(os.path.exists(os.path.join(wd, "index.html")))
+        with open(os.path.join(wd, "index.html")) as f:
+            self.assertIn("myjournal archive", f.read())
 
 
 if __name__ == "__main__":

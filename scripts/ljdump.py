@@ -156,7 +156,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
         try:
             r = account.retry(
                 f"export comments",
-                lambda: urllib.request.urlopen(request))
+                lambda: urllib.request.urlopen(request, timeout=SOCKET_TIMEOUT))
             meta = xml.dom.minidom.parse(r)
         except Exception as x:
             print("*** Error fetching comment meta, possibly not community maintainer?")
@@ -208,21 +208,24 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     for commentid in sorted_new_comment_ids:
         if commentid in comments_already_fetched:
             continue
+        if verbose:
+            print('Fetching comment bodies starting at ID %s' % (commentid))
+        request = urllib.request.Request(
+            journal_server+"/export_comments.bml?get=comment_body&startid=%d&numitems=%d%s" % (commentid, meta_comments_fetched_count, authas),
+            headers = {'Cookie': "ljsession="+session}
+        )
         try:
-            if verbose:
-                print('Fetching comment bodies starting at ID %s' % (commentid))
-            try:
-                r = urllib.request.urlopen(
-                    urllib.request.Request(
-                        journal_server+"/export_comments.bml?get=comment_body&startid=%d&numitems=%d%s" % (commentid, meta_comments_fetched_count, authas),
-                        headers = {'Cookie': "ljsession="+session}
-                    )
-                )
-                meta = xml.dom.minidom.parse(r)
-            except Exception as x:
-                print("*** Error fetching comment body, possibly not community maintainer?")
-                print("***", x)
-                break
+            # Wrapped in retry so a transient timeout/blip backs off and retries
+            # (matching the comment-meta fetch) instead of aborting all comments.
+            r = account.retry(
+                "export comment bodies",
+                lambda: urllib.request.urlopen(request, timeout=SOCKET_TIMEOUT))
+        except Exception as x:
+            print("*** Error fetching comment body, possibly not community maintainer?")
+            print("***", x)
+            break
+        try:
+            meta = xml.dom.minidom.parse(r)
         finally:
             r.close()
         for c in meta.getElementsByTagName("comment"):

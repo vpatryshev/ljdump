@@ -725,7 +725,8 @@ def ljdumptohtml(
     config, db, journal_name, cache_images=True, retry_images=True):
     journal = Journal(journal_name)
     unique=config.unique,
-    verbose=config.verbose,
+    verbose=config.verbose
+
     if verbose:
         print(f"Starting conversion for: {journal}")
 
@@ -870,7 +871,7 @@ def ljdumptohtml(
                     next_entry=next_entry
                 )
 
-        journal.write_text("entries/entry-{entry['itemid']}.html", page, entry_timestamp)
+        journal.write_text(f"entries/entry-{entry['itemid']}.html", page, entry_timestamp)
 
         entry_body = entry['event']
         (entry_body, uncached) = resolve_cached_image_references(entry_body, image_urls_to_filenames)

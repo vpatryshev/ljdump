@@ -58,7 +58,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     try:
         os.mkdir(journal_path)
         print("Created subdirectory: %s" % journal_path)
-    except:
+    except OSError:
         pass
 
     session = account.startSession()
@@ -124,7 +124,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
           errors += 1
         except xmlrpc.client.ProtocolError as pe:
             print(f"ProtocolError({pe.url}, {pe.errcode}, {pe.errmsg}) getting item: {item['item']}")
-            pprint.pprint(x)
+            pprint.pprint(pe)
             errors += 1
 
       # Assuming these emerge from the server in order by date from least to most recent...
@@ -143,7 +143,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
         f = open(f"{journal_path}/comment.meta")
         metacache = pickle.load(f)
         f.close()
-    except:
+    except OSError:
         metacache = {}
 
     meta_comments_fetched_count = 0
@@ -348,7 +348,7 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
                 try:
                     picfn = codecs.utf_8_decode(picfn)[0]
                     picf = open(f"{journal_path}/userpics/{picfn}{ext}", "wb")
-                except:
+                except OSError:
                     # for installations where the above utf_8_decode doesn't work
                     picfn = "".join([ord(x) < 128 and x or "_" for x in picfn])
                     picf = open(f"{journal_path}/userpics/{picfn}{ext}", "wb")

@@ -26,7 +26,7 @@
 # Copyright (c) 2024 Garrett Birkel and contributors
 
 
-import os, codecs, argparse, xml.dom.minidom, sys
+import os, codecs, argparse, xml.dom.minidom, sys, glob
 from datetime import datetime
 import urllib.request
 import urllib.parse
@@ -354,7 +354,8 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
         if e.errno == 17:  # Directory already exists
             pass
     # need to removed old md files, keeping the rest of the content
-    os.system(f"rm -rf {os. getcwd()}/{output_dir}/*.md")
+    for f in glob.glob(f"{output_dir}/*.md"):
+        os.remove(f)
 
     # Generate markdown files
     if verbose:

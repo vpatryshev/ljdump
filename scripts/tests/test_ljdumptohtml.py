@@ -36,6 +36,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ljdumptohtml import (
     Journal,
     ljdumptohtml,
+    _group_comments_by_entry,
+    _index_by,
+    _group_entries_by_tag,
     create_template_page,
     render_comment_and_subcomments_containers,
     render_comments_section,
@@ -603,6 +606,54 @@ def _make_comment(id=1, entryid=1, date="2024-03-15T11:00:00Z", user="reader",
     return {"id": id, "entryid": entryid, "date": date, "parentid": parentid,
             "posterid": posterid, "user": user, "subject": subject,
             "body": body, "state": state}
+
+
+class TestOrchestratorHelpers(unittest.TestCase):
+    """Unit tests for the pure helpers extracted from ljdumptohtml()."""
+
+    def test_group_comments_by_entry(self):
+        entries = [{"itemid": 1}, {"itemid": 2}]
+        comments = [{"entryid": 1, "body": "a"}, {"entryid": 1, "body": "b"},
+                    {"entryid": 2, "body": "c"}]
+        grouped = _group_comments_by_entry(entries, comments)
+        self.assertEqual([c["body"] for c in grouped[1]], ["a", "b"])
+        self.assertEqual([c["body"] for c in grouped[2]], ["c"])
+
+    def test_group_comments_entry_with_no_comments_gets_empty_list(self):
+        grouped = _group_comments_by_entry([{"itemid": 5}], [])
+        self.assertEqual(grouped[5], [])
+
+    def test_group_comments_orphan_comment_creates_group(self):
+        # A comment whose entry isn't in the entries list still gets a bucket.
+        grouped = _group_comments_by_entry([], [{"entryid": 9, "body": "x"}])
+        self.assertEqual(len(grouped[9]), 1)
+
+    def test_index_by(self):
+        rows = [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
+        self.assertEqual(_index_by(rows, "id"), {1: rows[0], 2: rows[1]})
+
+    def test_index_by_empty(self):
+        self.assertEqual(_index_by([], "id"), {})
+
+    def test_group_entries_by_tag(self):
+        entries = [
+            {"itemid": 1, "eventtime_unix": FIXED_TS, "subject": "One",
+             "props_taglist": "music, life"},
+            {"itemid": 2, "eventtime_unix": FIXED_TS, "subject": "Two",
+             "props_taglist": "life"},
+        ]
+        tags, by_tag = _group_entries_by_tag(entries)
+        self.assertEqual(tags, ["life", "music"])  # sorted
+        self.assertEqual(len(by_tag["life"]), 2)
+        self.assertEqual(len(by_tag["music"]), 1)
+        self.assertEqual(by_tag["music"][0]["subject"], "One")
+
+    def test_group_entries_by_tag_skips_untagged(self):
+        entries = [{"itemid": 1, "eventtime_unix": FIXED_TS, "subject": "X",
+                    "props_taglist": None}]
+        tags, by_tag = _group_entries_by_tag(entries)
+        self.assertEqual(tags, [])
+        self.assertEqual(by_tag, {})
 
 
 class TestLjdumptohtmlOrchestrator(unittest.TestCase):

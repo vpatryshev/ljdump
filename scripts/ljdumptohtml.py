@@ -705,101 +705,79 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
         return (1, None)
 
 
-def ljdumptohtml(
-    config, db, journal_name, cache_images=True, retry_images=True):
-    journal = Journal(journal_name)
-    unique=config.unique
-    verbose=config.verbose
-
-    if verbose:
-        print(f"Starting conversion for: {journal}")
-
-    all_entries = db.get_all_events()
-    all_comments = db.get_all_comments()
-
-    # Create arrays of comments by entry ID
-    comments_grouped_by_entry = {}
+def _group_comments_by_entry(all_entries, all_comments):
+    """Map each entry id to its list of comments (every entry gets a list,
+    even one with no comments)."""
+    grouped = {}
     for entry in all_entries:
-        e_id = entry['itemid']
-        # Make sure every entry has an array even if it has 0 comments
-        comments_grouped_by_entry[e_id] = []
+        grouped[entry['itemid']] = []
     for comment in all_comments:
         e_id = comment['entryid']
-        if not (e_id in comments_grouped_by_entry):
-            comments_grouped_by_entry[e_id] = []
-        comments_grouped_by_entry[e_id].append(comment)
+        if e_id not in grouped:
+            grouped[e_id] = []
+        grouped[e_id].append(comment)
+    return grouped
 
-    # Sort all entries by UNIX timestamp, oldest to newest
-    entries_by_date = sorted(all_entries, key=lambda x: x['eventtime_unix'], reverse=False)
 
-    # Fetch all user icons and sort by keyword
-    all_icons = db.get_all_icons()
-    icons_by_keyword = {}
-    for icon in all_icons:
-        icons_by_keyword[icon['keywords']] = icon
+def _index_by(rows, key):
+    """Build a dict from a list of dict rows, keyed by one of their fields."""
+    return {row[key]: row for row in rows}
 
-    # Fetch mood information and turn into a dictionary
-    all_moods = db.get_all_moods()
-    moods_by_id = {}
-    for mood in all_moods:
-        moods_by_id[mood['id']] = mood
 
-    #
-    # image caching
-    #
+def _cache_entry_images(db, journal, entries_by_date, unique, retry_images):
+    """Download and cache images referenced in entries, up to a fixed budget."""
+    dw_hosted_pattern = re.compile(r'^https://(\w+).dreamwidth.org/file/\d+x\d+/(.+)')
+    image_resolve_max = 200
+    entry_index = 0
+    while image_resolve_max > 0:
+        if entry_index >= len(entries_by_date):
+            image_resolve_max = 0
+        else:
+            entry = entries_by_date[entry_index]
+            entry_index += 1
+            entry_date = ts_to_utc(entry['eventtime_unix'])
+            entry_body = entry['event']
+            urls_found = re.findall(r'<img[^<>]*\ssrc\s?=\s?[\'\"](https?:/+[^\s\"\'()<>]+)[\'\"]', entry_body, flags=re.IGNORECASE)
+            subfolder = entry_date.strftime("%Y-%m")
+            for image_url in urls_found:
 
-    if cache_images:
-        dw_hosted_pattern = re.compile(r'^https://(\w+).dreamwidth.org/file/\d+x\d+/(.+)')
-        image_resolve_max = 200
-        entry_index = 0
-        while image_resolve_max > 0:
-            if entry_index >= len(entries_by_date):
-                image_resolve_max = 0
-            else:
-                entry = entries_by_date[entry_index]
-                entry_index += 1
-                e_id = entry['itemid']
-                entry_date = ts_to_utc(entry['eventtime_unix'])
-                entry_body = entry['event']
-                urls_found = re.findall(r'<img[^<>]*\ssrc\s?=\s?[\'\"](https?:/+[^\s\"\'()<>]+)[\'\"]', entry_body, flags=re.IGNORECASE)
-                subfolder = entry_date.strftime("%Y-%m")
-                for image_url in urls_found:
+                url_to_cache = image_url
+                if dw_hosted_pattern.match(image_url):
+                    dw_hosted = dw_hosted_pattern.search(image_url)
+                    url_to_cache = 'https://' + dw_hosted.group(1) + '.dreamwidth.org/file/' + dw_hosted.group(2)
 
-                    url_to_cache = image_url
-                    if dw_hosted_pattern.match(image_url):
-                        dw_hosted = dw_hosted_pattern.search(image_url)
-                        url_to_cache = 'https://' + dw_hosted.group(1) + '.dreamwidth.org/file/' + dw_hosted.group(2)
+                cached_image = db.get_or_create_cached_image_record(url_to_cache, entry_date)
+                try_cache = True
+                # If a fetch was already attempted less than one day ago, don't try again
+                if cached_image['date_last_attempted']:
+                    # Respect the global image cache setting
+                    try_cache = retry_images
+                    current_date = int(calendar.timegm(datetime.now(timezone.utc).utctimetuple()))
+                    if int(current_date) - int(cached_image['date_last_attempted']) < 86400:
+                        try_cache = False
+                # If we already have an image cached for this URL, skip it.
+                if (cached_image['cached'] == False) and try_cache:
+                    image_id = cached_image['id']
+                    (cache_result, img_filename) = download_entry_image(url_to_cache, journal, subfolder, image_id, entry['url'], unique)
+                    if (cache_result == 0) and (img_filename is not None):
+                        db.report_image_as_cached(image_id, img_filename, entry_date)
+                        image_resolve_max -= 1
+                    else:
+                        db.report_image_as_attempted(image_id)
 
-                    cached_image = db.get_or_create_cached_image_record(url_to_cache, entry_date)
-                    try_cache = True
-                    # If a fetch was already attempted less than one day ago, don't try again
-                    if cached_image['date_last_attempted']:
-                        # Respect the global image cache setting
-                        try_cache = retry_images
-                        current_date = int(calendar.timegm(datetime.now(timezone.utc).utctimetuple()))
-                        if int(current_date) - int(cached_image['date_last_attempted']) < 86400:
-                            try_cache = False
-                    # If we already have an image cached for this URL, skip it.
-                    if (cached_image['cached'] == False) and try_cache:
-                        image_id = cached_image['id']
-                        cache_result = 0
-                        img_filename = None
-                        (cache_result, img_filename) = download_entry_image(url_to_cache, journal, subfolder, image_id, entry['url'], unique)
-                        if (cache_result == 0) and (img_filename is not None):
-                            db.report_image_as_cached(image_id, img_filename, entry_date)
-                            image_resolve_max -= 1
-                        else:
-                            db.report_image_as_attempted(image_id)
 
-    all_cached = db.get_all_successfully_cached_image_records()
-    image_urls_to_filenames = {}
-    for i in all_cached:
-        image_urls_to_filenames[i['url']] = i['filename']
+def _load_cached_image_map(db):
+    """Map successfully-cached image URLs to their local filenames."""
+    return {i['url']: i['filename']
+            for i in db.get_all_successfully_cached_image_records()}
 
-    #
-    # Entry pages, one per entry.
-    #
 
+def _render_entry_pages(journal, entries_by_date, comments_grouped_by_entry,
+                        image_urls_to_filenames, icons_by_keyword, moods_by_id):
+    """Write one HTML page per entry.
+
+    Returns (entries_table_of_contents, entries_with_uncached_images), where the
+    TOC is a list of month groups (each a list of per-entry toc dicts)."""
     entries_with_uncached_images = []
 
     print("Rendering %s entry pages..." % (len(entries_by_date)))
@@ -835,7 +813,7 @@ def ljdumptohtml(
             # If we're on the first entry, skip the month/year comparison
             current_year_and_month_str = entry_year_and_month_str
         current_month_group.append(toc)
-    
+
         next_entry = None
         if i < len(entries_by_date) - 1:
             next_entry = entries_by_date[i+1]
@@ -858,13 +836,13 @@ def ljdumptohtml(
         if len(uncached) > 0:
             entries_with_uncached_images.append((toc, uncached))
 
-
     entries_table_of_contents.append(current_month_group)
+    return entries_table_of_contents, entries_with_uncached_images
 
-    #
-    # History pages, with 20 entries each.
-    #
 
+def _render_history_pages(journal, entries_by_date, comments_grouped_by_entry,
+                          image_urls_to_filenames, icons_by_keyword, moods_by_id):
+    """Write history pages with 20 entries each; return their table of contents."""
     # Create groups of 20 entries for the history pages
     groups_of_twenty = []
     current_group = []
@@ -904,17 +882,16 @@ def ljdumptohtml(
         journal.write_text(f"history/page-{i+1}.html", page)
 
         # Used for building a table of contents later
-        toc = {
+        history_page_table_of_contents.append({
             'from': ts_to_utc(current_group[0]['eventtime_unix']),
             'to': ts_to_utc(current_group[-1]['eventtime_unix']),
             'filename': "history/page-%s.html" % (i+1)
-        }
-        history_page_table_of_contents.append(toc)
+        })
+    return history_page_table_of_contents
 
-    #
-    # Organizing by tag
-    #
 
+def _group_entries_by_tag(entries_by_date):
+    """Return (sorted tag names, {tag: [toc dicts]}) for all tagged entries."""
     entries_by_tag = {}
     tags_encountered = []
     for entry in entries_by_date:
@@ -926,53 +903,69 @@ def ljdumptohtml(
                 'subject': entry['subject'],
                 'filename': ("entries/entry-%s.html" % entry['itemid'])
             }
-            tags_split = taglist.split(', ')
-            for tag in tags_split:
-                if not (tag in entries_by_tag):
+            for tag in taglist.split(', '):
+                if tag not in entries_by_tag:
                     tags_encountered.append(tag)
                     entries_by_tag[tag] = []
                 entries_by_tag[tag].append(toc)
+    return sorted(tags_encountered), entries_by_tag
 
-    tags_encountered = sorted(tags_encountered)
+
+def _copy_support_files(journal):
+    """Copy the default stylesheet and user icon into the journal folder."""
+    shutil.copyfile("stylesheet.css", f"{journal.workdir}/stylesheet.css")
+    shutil.copyfile("user.png", f"{journal.workdir}/user.png")
+
+
+def ljdumptohtml(
+    config, db, journal_name, cache_images=True, retry_images=True):
+    journal = Journal(journal_name)
+    verbose=config.verbose
+
+    if verbose:
+        print(f"Starting conversion for: {journal}")
+
+    all_entries = db.get_all_events()
+    all_comments = db.get_all_comments()
+    comments_grouped_by_entry = _group_comments_by_entry(all_entries, all_comments)
+
+    # Oldest to newest
+    entries_by_date = sorted(all_entries, key=lambda x: x['eventtime_unix'])
+
+    icons_by_keyword = _index_by(db.get_all_icons(), 'keywords')
+    moods_by_id = _index_by(db.get_all_moods(), 'id')
+
+    if cache_images:
+        _cache_entry_images(db, journal, entries_by_date, config.unique, retry_images)
+
+    image_urls_to_filenames = _load_cached_image_map(db)
+
+    entries_table_of_contents, entries_with_uncached_images = _render_entry_pages(
+        journal, entries_by_date, comments_grouped_by_entry,
+        image_urls_to_filenames, icons_by_keyword, moods_by_id)
+
+    history_page_table_of_contents = _render_history_pages(
+        journal, entries_by_date, comments_grouped_by_entry,
+        image_urls_to_filenames, icons_by_keyword, moods_by_id)
+
+    tags_encountered, entries_by_tag = _group_entries_by_tag(entries_by_date)
 
     print("Rendering uncached image report page (%d entries)..." % (len(entries_with_uncached_images)))
-
-    #
-    # Uncached images report page
-    #
-
-    page = create_uncached_images_report_page(
-            journal=journal,
-            entries=entries_with_uncached_images,
-        )
-    journal.write_text("uncached_images_report.html", page)
+    journal.write_text(
+        "uncached_images_report.html",
+        create_uncached_images_report_page(journal=journal, entries=entries_with_uncached_images))
 
     print("Rendering table of contents page...")
-
-    #
-    # Table of contents page
-    #
-
-    page = create_table_of_contents_page(
+    journal.write_text("index.html", create_table_of_contents_page(
             journal=journal,
             entry_count=len(entries_by_date),
             entries_table_of_contents=entries_table_of_contents,
             history_page_table_of_contents=history_page_table_of_contents,
             tags_encountered=tags_encountered,
-            entries_by_tag=entries_by_tag,
-        )
-    journal.write_text("index.html", page)
+            entries_by_tag=entries_by_tag))
 
     print("Copying support files...")
-
-    # Copy the default stylesheet into the journal folder
-    source = "stylesheet.css"
-    dest = f"{journal.workdir}/stylesheet.css"
-    shutil.copyfile(source, dest)
-    # Copy a generic user icon into the journal folder
-    source = "user.png"
-    dest = f"{journal.workdir}/user.png"
-    shutil.copyfile(source, dest)
+    _copy_support_files(journal)
     db.close()
 
     print("Done!")

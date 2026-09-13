@@ -222,7 +222,7 @@ def create_entry_markdown(entry, output_dir=None):
     lines.append("")
 
     # Metadata
-    d = datetime.utcfromtimestamp(entry['eventtime_unix'])
+    d = ts_to_utc(entry['eventtime_unix'])
     dh = int(f'{d:%I}')
     date_str = f"{d:%b}. {d.day}, {d:%Y} {dh}:{d:%M} {d:%p}"
     lines.append(f"**Date:** {date_str}")
@@ -272,7 +272,7 @@ def filter_entries(entries, tags=None, start_date=None, end_date=None):
 
     for entry in entries:
         # Check date range#
-        entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
+        entry_date = ts_to_utc(entry['eventtime_unix'])
         if start_date and entry_date < start_date:
             continue
         if end_date and entry_date > end_date:
@@ -347,12 +347,7 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
 
     db.close(None)
 
-    try:
-        os.mkdir(output_dir)
-#        print(f"Created {os. getcwd()}/{output_dir}")
-    except OSError as e:
-        if e.errno == 17:  # Directory already exists
-            pass
+    os.makedirs(output_dir, exist_ok=True)
     # need to removed old md files, keeping the rest of the content
     for f in glob.glob(f"{output_dir}/*.md"):
         os.remove(f)
@@ -362,7 +357,7 @@ def ljdumptomd(journal_short_name, tags=None, date_range=None, verbose=True):
         print(f"Generating {len(filtered_entries)} markdown files...")
 
     for entry in filtered_entries:
-        entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
+        entry_date = ts_to_utc(entry['eventtime_unix'])
 
         # Create filename with date and itemid
         filename = f"{entry_date.strftime('%Y-%m-%d')}_{entry['itemid']}.md"

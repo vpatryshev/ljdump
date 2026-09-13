@@ -1,3 +1,30 @@
-sync
-scripts/__pycache__/*
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
 
+# Test / scratch artifacts
+*.tmp
+*.log
+*.zip
+/here
+
+# Generated data, archives, and caches
+/sync
+/work/
+/cache/
+*.db
+
+# Editor / IDE / tooling
+.idea/
+.claude/
+*.iml
+.DS_Store
+
+# Local scratch scripts (may contain credentials — keep out of git)
+/cp1
+/up1
+/u2j
+/k2j_i
+/k2j_w
+/updwhere
+/syncit

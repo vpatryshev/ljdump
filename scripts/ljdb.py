@@ -135,7 +135,7 @@ class LJDB(DB):
 
     if match:
       domain = match.group()
-      print(f"found {server}? {match}, domain={domain}")
+      print(f"found {server}? domain={domain}")
       longname =  f"{work_directory}/{journal}.{domain}"
       path = longname if (os.path.exists(longname)) else f"{work_directory}/{journal}"
       return f"{path}/journal.db" if os.path.isdir(path) else fail(f"no such directory: {path}")
@@ -750,7 +750,7 @@ class LJDB(DB):
     """ update the record for an image showing that a fetch was recently attempted but failed.
     :param image_id: id of image
     """
-    current_date = calendar.timegm(datetime.utcnow().utctimetuple())
+    current_date = calendar.timegm(datetime.now(timezone.utc).utctimetuple())
     data = {
         "id": image_id,
         "date_last_attempted": current_date
@@ -766,7 +766,7 @@ class LJDB(DB):
     date_or_none = None
     if date_first_seen:
         date_or_none = calendar.timegm(date_first_seen.utctimetuple())
-    current_date = calendar.timegm(datetime.utcnow().utctimetuple())
+    current_date = calendar.timegm(datetime.now(timezone.utc).utctimetuple())
     data = {
         "id": image_id,
         "filename": filename,

@@ -43,6 +43,20 @@ MimeExtensions = {
     "image/png": ".png",
 }
 
+def ts_to_utc(timestamp):
+  """Naive UTC datetime from a unix timestamp.
+
+  Non-deprecated replacement for datetime.utcfromtimestamp() (removed the
+  tzinfo to preserve the previous naive-UTC behavior of callers)."""
+  return datetime.fromtimestamp(timestamp, timezone.utc).replace(tzinfo=None)
+
+def format_entry_date(d):
+  """Format an entry datetime as e.g. 'Jan. 5, 2020 9:03 AM'.
+
+  Shared so the entry-date format lives in exactly one place."""
+  hour = int(f'{d:%I}')  # strip the leading zero from the 12-hour clock
+  return f'{d:%b}. {d.day}, {d:%Y} {hour}:{d:%M} {d:%p}'
+
 def fail(message):
   """Fail with a message."""
   print(f"\n\n❌ {message}", file=sys.stderr)

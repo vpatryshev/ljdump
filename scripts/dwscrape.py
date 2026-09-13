@@ -447,7 +447,7 @@ class DreamwidthScraper:
                 with open(debug_file, 'w', encoding='utf-8') as f:
                     f.write(html)
                 self.log(f"  Saved first page HTML to {debug_file} for debugging")
-            except:
+            except OSError:
                 pass
 
         parser = DreamwidthHTMLParser()

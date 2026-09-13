@@ -55,11 +55,9 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
 
     if verbose:
         print("Fetching journal entries for: %s" % journal)
-    try:
-        os.mkdir(journal_path)
+    if not os.path.isdir(journal_path):
+        os.makedirs(journal_path, exist_ok=True)
         print("Created subdirectory: %s" % journal_path)
-    except OSError:
-        pass
 
     session = account.startSession()
 
@@ -265,6 +263,15 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
     #
     # Mood information
     #
+    try:
+        account.retry(f"Login for mood", lambda: server.LJ.XMLRPC.login(authed({
+            'ver': 1,
+            'getmoods': 1,
+        })))
+    except ProtocolError as pe:
+        print(f"Protocol error, may want to retry again: {pe}", file=sys.stderr)
+    except Exception as e:
+        fail(f"Error logging in: {e}")
 
     r = server.LJ.XMLRPC.login(authed({
         'ver': 1,
@@ -332,29 +339,23 @@ def ljdump(config, journal, verbose=True, max_to_fetch=100, make_pages=False, ca
         })
 
     if username == journal:
-        try:
-            os.mkdir("%s/userpics" % (journal))
-        except OSError as e:
-            if e.errno == 17:   # Folder already exists
-                pass
+        os.makedirs("%s/userpics" % (journal), exist_ok=True)
         if verbose:
             print("Fetching userpics for: %s" % journal)
 
         for p in userpics:
             if p is not None:
-                pic = urllib.request.urlopen(userpics[p])
-                ext = MimeExtensions.get(pic.info()["Content-Type"], "")
-                picfn = re.sub(r'[*?\\/:<> "|]', "_", p)
-                try:
-                    picfn = codecs.utf_8_decode(picfn)[0]
-                    picf = open(f"{journal_path}/userpics/{picfn}{ext}", "wb")
-                except OSError:
-                    # for installations where the above utf_8_decode doesn't work
-                    picfn = "".join([ord(x) < 128 and x or "_" for x in picfn])
-                    picf = open(f"{journal_path}/userpics/{picfn}{ext}", "wb")
-                shutil.copyfileobj(pic, picf)
-                pic.close()
-                picf.close()
+                with urllib.request.urlopen(userpics[p]) as pic:
+                    ext = MimeExtensions.get(pic.info()["Content-Type"], "")
+                    picfn = re.sub(r'[*?\\/:<> "|]', "_", p)
+                    # picfn is already str in Python 3; on filesystems that can't
+                    # represent non-ASCII names, fall back to ASCII-only.
+                    try:
+                        picfn.encode(sys.getfilesystemencoding())
+                    except UnicodeEncodeError:
+                        picfn = "".join([c if ord(c) < 128 else "_" for c in picfn])
+                    with open(f"{journal_path}/userpics/{picfn}{ext}", "wb") as picf:
+                        shutil.copyfileobj(pic, picf)
                 db.insert_or_update_icon(
                     {   'keywords': p,
                         'filename': (picfn+ext),

@@ -7,13 +7,7 @@ import calendar
 from datetime import *
 import json
 import time
-from utils import fail
-
-MimeExtensions = {
-    "image/gif": ".gif",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-}
+from utils import fail, MimeExtensions
 
 def load_config(config_file_path):
     """Load configuration from JSON file."""

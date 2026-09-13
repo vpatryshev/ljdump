@@ -105,3 +105,4 @@ class DB:
     self.__connection.commit()
     self.__connection.close()
     cursor = None
+    self.logfile.close()

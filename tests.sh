@@ -1,22 +1,7 @@
 #!/bin/bash
-# Run the unit test suite. Run from anywhere — we cd to the project root first
-# so the `scripts.*` module names resolve. A single `unittest` invocation
-# aggregates all modules and exits non-zero if any test fails.
+# Run the unit test suite. Run from anywhere — we cd to the project root first.
+# `unittest discover` auto-collects every scripts/tests/test_*.py, so new test
+# modules are picked up without editing this file. Exits non-zero on any failure.
+# Extra args are forwarded to unittest (e.g. ./tests.sh -v).
 cd "$(dirname "$0")"
-python3 -m unittest \
-  scripts.tests.test_db \
-  scripts.tests.test_ljdumpdb \
-  scripts.tests.test_utils \
-  scripts.tests.test_account \
-  scripts.tests.test_compare_from_db \
-  scripts.tests.test_update_from_db \
-  scripts.tests.test_dwscrape \
-  scripts.tests.test_fix_latex_chars \
-  scripts.tests.test_ljdumptomd \
-  scripts.tests.test_combine_clean_md \
-  scripts.tests.test_cache \
-  scripts.tests.test_update_entries \
-  scripts.tests.test_ljdumptohtml \
-  scripts.tests.test_config \
-  scripts.tests.test_ljdumpops \
-  scripts.tests.test_journal
+python3 -m unittest discover -s scripts/tests -t scripts/tests -p "test_*.py" "$@"

@@ -28,11 +28,7 @@
 from journal import *
 from account import *
 
-MimeExtensions = {
-    "image/gif": ".gif",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-}
+# MimeExtensions is defined once in utils.py and reaches us via the star imports.
 
 
 # journal: Name of journal
@@ -124,10 +120,9 @@ def render_comment_and_subcomments_containers(comment, comments_by_id, comment_c
     span_date.text = "Date: "
     span_date_value = ET.SubElement(comment_date, 'span')
     if comment['date_unix']:
-        d = datetime.utcfromtimestamp(comment['date_unix'])
+        d = ts_to_utc(comment['date_unix'])
         # If anybody has a way to get rid of the leading zero that works in MacOS and Windows 11, let me know.
-        dh = int(f'{d:%I}')
-        span_date_value.text = html.escape(f'{d:%b}. {d.day}, {d:%Y} {dh}:{d:%M} {d:%p}')
+        span_date_value.text = html.escape(format_entry_date(d))
     else:
         span_date_value.text = "(None)"
 
@@ -265,10 +260,9 @@ def render_one_entry_container(journal, entry, comments_count, icons_by_keyword,
 
     # Datestamp
     entry_date = ET.SubElement(entry_header_inner, 'span', attrib={'class': 'datetime'})
-    d = datetime.utcfromtimestamp(entry['eventtime_unix'])
+    d = ts_to_utc(entry['eventtime_unix'])
     # If anybody has a way to get rid of the leading zero that works in MacOS and Windows 11, let me know.
-    dh = int(f'{d:%I}')
-    entry_date.text = html.escape(f'{d:%b}. {d.day}, {d:%Y} {dh}:{d:%M} {d:%p}')
+    entry_date.text = html.escape(format_entry_date(d))
 
     # Another entry inner wrapper
     entry_div = ET.SubElement(entry_inner, 'div')
@@ -614,8 +608,7 @@ def create_table_of_contents_page(journal, entry_count, entries_table_of_content
             tag_li = ET.SubElement(tag_ul, 'li')
             tag_a = ET.SubElement(tag_li, 'a', attrib={ 'href': toc['filename'] })
             d = toc['date']
-            dh = int(f'{d:%I}')
-            e_date = html.escape(f'{d:%b}. {d.day}, {d:%Y} {dh}:{d:%M} {d:%p}')
+            e_date = html.escape(format_entry_date(d))
             tag_a.text = "%s:" % e_date
             tag_a.tail = " %s" % toc['subject']
 
@@ -631,8 +624,7 @@ def create_table_of_contents_page(journal, entry_count, entries_table_of_content
             month_li = ET.SubElement(month_ul, 'li')
             month_a = ET.SubElement(month_li, 'a', attrib={ 'href': toc['filename'] })
             d = toc['date']
-            dh = int(f'{d:%I}')
-            e_date = html.escape(f'{d:%b}. {d.day}, {d:%Y} {dh}:{d:%M} {d:%p}')
+            e_date = html.escape(format_entry_date(d))
             month_a.text = "%s:" % e_date
             month_a.tail = " %s" % toc['subject']
 
@@ -641,7 +633,7 @@ def create_table_of_contents_page(journal, entry_count, entries_table_of_content
 
 
 def create_uncached_images_report_page(journal, entries):
-    page, content = create_template_page(journal, "{journal.name} uncached images", False)
+    page, content = create_template_page(journal, f"{journal.name} uncached images", False)
 
     toc_banner = ET.SubElement(content, 'h1')
     toc_banner.text = 'Number of entries with uncached (possibly broken) images: %s' % len(entries)
@@ -654,8 +646,7 @@ def create_uncached_images_report_page(journal, entries):
         li = ET.SubElement(ul, 'li')
         a = ET.SubElement(li, 'a', attrib={ 'href': toc['filename'] })
         d = toc['date']
-        dh = int(f'{d:%I}')
-        e_date = html.escape(f'{d:%b}. {d.day}, {d:%Y} {dh}:{d:%M} {d:%p}')
+        e_date = html.escape(format_entry_date(d))
         a.text = "%s:" % e_date
         a.tail = " %s (%s)" % (toc['subject'], len(urls))
 
@@ -671,44 +662,34 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
             # Only necessary for Dreamwidth-hosted images, but does no harm generally.
             headers = {'Referer': entry_url, 'Cookie': "unique="+unique}
 
-        image_req = urllib.request.urlopen(urllib.request.Request(img_url, headers = headers), timeout = 4)
-        if image_req.headers.get_content_maintype() != 'image':
-            print('Content type %s not expected, image skipped: %s' % (image_req.headers.get_content_maintype(), img_url))
-            return (1, None)
-        extension = MimeExtensions.get(image_req.info()["Content-Type"], "")
+        with urllib.request.urlopen(urllib.request.Request(img_url, headers = headers), timeout = 4) as image_req:
+            if image_req.headers.get_content_maintype() != 'image':
+                print('Content type %s not expected, image skipped: %s' % (image_req.headers.get_content_maintype(), img_url))
+                return (1, None)
+            extension = MimeExtensions.get(image_req.info()["Content-Type"], "")
 
-        # Try and decode any utf-8 in the URL
-        try:
-            filename = codecs.utf_8_decode(img_url)[0]
-        except:
-            # for installations where the above utf_8_decode doesn't work
-            filename = "".join([ord(x) < 128 and x or "_" for x in img_url])
-        # There may not be an extension we're familiar with present, but if there is, remove it
-        filename = re.sub(r'(\.gif|\.jpg|\.jpeg|\.png)$', "", filename, flags=re.IGNORECASE)
-        # Take the protocol off the URL
-        filename = re.sub(r'^https?:/+', "", filename, flags=re.IGNORECASE)
-        # Neutralize characters that don't look like a basic filename, and truncate it to the last 50 characters
-        filename = re.sub(r'[*?\\/:\.\'<> "|]+', "_", filename[-50:] )
-        filename = filename.lstrip("_")
-        filename = "%s/%s-%s%s" % (subfolder, image_id, filename, extension)
+            # img_url is already str in Python 3; keep it, but on filesystems
+            # that can't represent non-ASCII names, fall back to ASCII-only.
+            filename = img_url
+            try:
+                filename.encode(sys.getfilesystemencoding())
+            except UnicodeEncodeError:
+                filename = "".join([c if ord(c) < 128 else "_" for c in filename])
+            # There may not be an extension we're familiar with present, but if there is, remove it
+            filename = re.sub(r'(\.gif|\.jpg|\.jpeg|\.png)$', "", filename, flags=re.IGNORECASE)
+            # Take the protocol off the URL
+            filename = re.sub(r'^https?:/+', "", filename, flags=re.IGNORECASE)
+            # Neutralize characters that don't look like a basic filename, and truncate it to the last 50 characters
+            filename = re.sub(r'[*?\\/:\.\'<> "|]+', "_", filename[-50:] )
+            filename = filename.lstrip("_")
+            filename = "%s/%s-%s%s" % (subfolder, image_id, filename, extension)
 
-        # Make sure our cache folder and subfolder exist
-        try:
-            os.mkdir(f"{journal.name}/images")
-        except OSError as e:
-            if e.errno == 17:   # Folder already exists
-                pass
-        try:
-            os.mkdir(f"{journal.name}/images/{subfolder}")
-        except OSError as e:
-            if e.errno == 17:   # Folder already exists
-                pass
+            # Make sure our cache folder and subfolder exist (creates images/ too)
+            os.makedirs(f"{journal.name}/images/{subfolder}", exist_ok=True)
 
-        # Copy the file stream directly into the file and close both
-        pic_file = open(f"{journal.name}/images/{filename}", "wb")
-        shutil.copyfileobj(image_req, pic_file)
-        image_req.close()
-        pic_file.close()
+            # Copy the file stream directly into the file
+            with open(f"{journal.name}/images/{filename}", "wb") as pic_file:
+                shutil.copyfileobj(image_req, pic_file)
         return (0, filename)
     except urllib.error.HTTPError as e:
         print(e)
@@ -724,7 +705,7 @@ def download_entry_image(img_url, journal, subfolder, image_id, entry_url, uniqu
 def ljdumptohtml(
     config, db, journal_name, cache_images=True, retry_images=True):
     journal = Journal(journal_name)
-    unique=config.unique,
+    unique=config.unique
     verbose=config.verbose
 
     if verbose:
@@ -775,7 +756,7 @@ def ljdumptohtml(
                 entry = entries_by_date[entry_index]
                 entry_index += 1
                 e_id = entry['itemid']
-                entry_date = datetime.utcfromtimestamp(entry['eventtime_unix'])
+                entry_date = ts_to_utc(entry['eventtime_unix'])
                 entry_body = entry['event']
                 urls_found = re.findall(r'<img[^<>]*\ssrc\s?=\s?[\'\"](https?:/+[^\s\"\'()<>]+)[\'\"]', entry_body, flags=re.IGNORECASE)
                 subfolder = entry_date.strftime("%Y-%m")
@@ -820,11 +801,7 @@ def ljdumptohtml(
 
     print("Rendering %s entry pages..." % (len(entries_by_date)))
 
-    try:
-        os.mkdir(f"{journal.name}/entries")
-    except OSError as e:
-        if e.errno == 17:   # Folder already exists
-            pass
+    os.makedirs(f"{journal.name}/entries", exist_ok=True)
 
     entries_table_of_contents = []
     current_month_group = []
@@ -833,7 +810,7 @@ def ljdumptohtml(
     for i in range(0, len(entries_by_date)):
         entry = entries_by_date[i]
         entry_timestamp = entry['eventtime_unix']
-        entry_date = datetime.utcfromtimestamp(entry_timestamp)
+        entry_date = ts_to_utc(entry_timestamp)
         entry_year_and_month_str = entry_date.strftime("%Y-%m")
 
         # Used for building a table of contents later
@@ -898,11 +875,7 @@ def ljdumptohtml(
 
     print("Rendering %s history pages..." % (len(groups_of_twenty)))
 
-    try:
-        os.mkdir(f"{journal.name}/history")
-    except OSError as e:
-        if e.errno == 17:   # Folder already exists
-            pass
+    os.makedirs(f"{journal.name}/history", exist_ok=True)
 
     history_page_table_of_contents = []
     for i in range(0, len(groups_of_twenty)):
@@ -929,8 +902,8 @@ def ljdumptohtml(
 
         # Used for building a table of contents later
         toc = {
-            'from': datetime.utcfromtimestamp(current_group[0]['eventtime_unix']),
-            'to': datetime.utcfromtimestamp(current_group[-1]['eventtime_unix']),
+            'from': ts_to_utc(current_group[0]['eventtime_unix']),
+            'to': ts_to_utc(current_group[-1]['eventtime_unix']),
             'filename': "history/page-%s.html" % (i+1)
         }
         history_page_table_of_contents.append(toc)
@@ -946,7 +919,7 @@ def ljdumptohtml(
         if taglist is not None:
             # Used for building a table of contents later
             toc = {
-                'date': datetime.utcfromtimestamp(entry['eventtime_unix']),
+                'date': ts_to_utc(entry['eventtime_unix']),
                 'subject': entry['subject'],
                 'filename': ("entries/entry-%s.html" % entry['itemid'])
             }

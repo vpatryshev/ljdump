@@ -481,6 +481,13 @@ class TestCreateUncachedImagesReportPage(unittest.TestCase):
         s = create_uncached_images_report_page(self.journal, [])
         self.assertIn("Number of entries with uncached (possibly broken) images: 0", s)
 
+    def test_title_is_interpolated(self):
+        # Regression guard: the page title was a plain string missing the f
+        # prefix, so it rendered the literal "{journal.name}".
+        s = create_uncached_images_report_page(self.journal, [])
+        self.assertIn("myjournal uncached images", s)
+        self.assertNotIn("{journal.name}", s)
+
     def test_report_with_entries_and_url_count(self):
         uc = [({"date": self.d, "subject": "Entry",
                 "filename": "entries/entry-1.html"},
@@ -513,6 +520,9 @@ class TestDownloadEntryImage(unittest.TestCase):
         resp.info.return_value = {"Content-Type": content_type}
         # shutil.copyfileobj reads in chunks; return data then EOF
         resp.read.side_effect = [b"imagedata", b""]
+        # download_entry_image uses urlopen(...) as a context manager
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = False
         return resp
 
     def test_successful_download_writes_file(self):

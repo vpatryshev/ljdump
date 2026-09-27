@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-update_entries.py — apply a sed-style regex substitution to journal entries.
+update_in_db.py — apply a sed-style regex substitution to journal entries.
 
 Usage:
-    python3 scripts/update_entries.py <journal> <where_clause> <s/old/new/[g]>
+    python3 scripts/update_in_db.py <journal> <where_clause> <s/old/new/[g]>
 
 Arguments:
     journal        Journal short name; database is expected at work/<journal>/journal.db
@@ -12,7 +12,7 @@ Arguments:
     regex          Substitution in sed form: s/pattern/replacement/ or s/pattern/replacement/g
 
 Example:
-    python3 scripts/update_entries.py kdanilov "props_taglist LIKE '%music%'" "s/oldband/newband/g"
+    python3 scripts/update_in_db.py kdanilov "props_taglist LIKE '%music%'" "s/oldband/newband/g"
 """
 
 import argparse
@@ -58,6 +58,7 @@ def main():
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
     regex = args.regex
+    where = args.where_clause
     sql = f"SELECT itemid, event FROM entries WHERE {args.where_clause}"
     if args.verbose:
         print(f"Query: {sql}")
@@ -70,11 +71,11 @@ def main():
 
     db_path = os.path.join("work", args.journal, "journal.db")
     db = LJDB(db_path, verbose=args.verbose)
-
+    entries = db.select(where)
     cur = db.cursor()
     cur.execute(sql)
     rows = cur.fetchall()
-
+    print(f"{len(rows)} rows, {len(entries)} entries")
     now = datetime.now(timezone.utc)
     now_iso = now.strftime("%Y-%m-%d %H:%M:%S")
     now_unix = float(calendar.timegm(now.utctimetuple()))

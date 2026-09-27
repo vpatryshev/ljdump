@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Test suite for update_entries.py.
+Test suite for update_in_db.py.
 
 Covers:
   * parse_sed() — the importable sed-style s/pattern/replacement/[g] parser:
@@ -27,7 +27,7 @@ from unittest.mock import patch
 # Ensure the scripts directory is on the path so imports resolve
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from update_entries import parse_sed
+from update_in_db import parse_sed
 from ljdb import LJDB
 
 

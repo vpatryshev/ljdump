@@ -161,7 +161,8 @@ class LJDB(DB):
 
     super().__init__(path, verbose, create)
 
-    self.create_tables_if_missing()
+    if (create):
+      self.create_tables_if_missing()
 
   def create_tables_if_missing(self):
     """ create required database tables if missing

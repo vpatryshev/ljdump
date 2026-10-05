@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ljdb import LJDB
+from utils import *
 
 
 def parse_sed(expr):
@@ -64,7 +65,7 @@ def main():
         print(f"Query: {sql}")
         print(f"Regex: {regex} from {args.regex}")
     try:
-        pattern, replacement, count = parse_sed(re.escape(regex))
+        pattern, replacement, count = parse_sed(regex)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -73,23 +74,23 @@ def main():
     db = LJDB(db_path, verbose=args.verbose)
     entries = db.select(where)
     cur = db.cursor()
-    cur.execute(sql)
-    rows = cur.fetchall()
-    print(f"{len(rows)} rows, {len(entries)} entries")
+    print(f"{len(entries)} entries")
     now = datetime.now(timezone.utc)
     now_iso = now.strftime("%Y-%m-%d %H:%M:%S")
     now_unix = float(calendar.timegm(now.utctimetuple()))
-    print(pattern)
+    print(f"PATTERN={pattern}")
     updated = 0
-    for itemid, event in rows:
-        if event is None:
+    for entry in entries:
+        if entry['event'] is None:
             continue
+        event = entry['event']
         new_event = re.sub(pattern, replacement, event, count=count)
+        # fail(f"fuck {entry['eventtime']}, {entry['url']}\n{event}\n=================\n{new_event}")
         if new_event == event:
             continue
 
         if args.dry_run:
-            print(f"[dry-run] Would update itemid={itemid}")
+            print(f"[dry-run] Would update itemid={entry['itemid']}")
             if args.verbose:
                 # Show first differing line for context
                 old_lines = event.splitlines()
@@ -99,15 +100,18 @@ def main():
                         print(f"  - {old!r}")
                         print(f"  + {new!r}")
         else:
-            cur.execute("""
+            # TODO: get rid of cur and rows
+            # cur.execute(sql)
+            # rows = cur.fetchall()
+            db.execute("""
                 UPDATE entries
                 SET event = ?,
                     updatetime = ?,
                     updatetime_unix = ?
                 WHERE itemid = ?
-            """, (new_event, now_iso, now_unix, itemid))
+            """, (new_event, now_iso, now_unix, entry['itemid']))
             if args.verbose:
-                print(f"Updated itemid={itemid}")
+                print(f"Updated itemid={entry['itemid']}")
 
         updated += 1
 

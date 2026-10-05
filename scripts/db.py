@@ -26,6 +26,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from dataclasses import dataclass
 from utils import *
 
 
@@ -69,7 +70,7 @@ class DB:
     return cur
 
   def select(self, where: str) -> list:
-    sql = f"SELECT itemid, subject, event, eventtime, props_taglist FROM entries WHERE {where}"
+    sql = f"SELECT itemid, subject, event, eventtime, props_taglist, url FROM entries WHERE {where}"
     rows = self.execute(sql).fetchall()
     return [dict(r) for r in rows]
 

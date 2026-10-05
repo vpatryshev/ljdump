@@ -57,13 +57,13 @@ class TestSelectItemids(unittest.TestCase):
         conn.execute("""
             CREATE TABLE entries (
                 itemid INTEGER PRIMARY KEY, subject TEXT, event TEXT,
-                eventtime TEXT, props_taglist TEXT)
+                eventtime TEXT, props_taglist TEXT, url TEXT)
         """)
         conn.executemany(
-            "INSERT INTO entries VALUES (?,?,?,?,?)",
-            [(9927, "c", "c", "t", "life"),
-             (9925, "a", "a", "t", "work"),
-             (9926, "b", "b", "t", "work")])
+            "INSERT INTO entries VALUES (?,?,?,?,?,?)",
+            [(9927, "c", "c", "t", "life", "https://example.com/9927"),
+             (9925, "a", "a", "t", "work", "https://example.com/9925"),
+             (9926, "b", "b", "t", "work", "https://example.com/9926")])
         conn.commit()
         conn.close()
         self.db = DB(self._path)

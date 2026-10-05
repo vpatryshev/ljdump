@@ -31,14 +31,15 @@ def _make_db(path: str, with_entries: bool = True, with_status: bool = False):
                 subject      TEXT,
                 event        TEXT,
                 eventtime    TEXT,
-                props_taglist TEXT
+                props_taglist TEXT,
+                url          TEXT
             )
         """)
         conn.execute("""
             INSERT INTO entries VALUES
-                (1, 'Hello World', 'First entry body', '2024-01-15 10:00:00', 'tag1,tag2'),
-                (2, 'Second Post', 'Second entry body', '2024-02-20 14:30:00', 'tag2,tag3'),
-                (3, NULL,         'No subject entry',  '2024-03-01 09:00:00', NULL)
+                (1, 'Hello World', 'First entry body', '2024-01-15 10:00:00', 'tag1,tag2', 'https://example.com/1'),
+                (2, 'Second Post', 'Second entry body', '2024-02-20 14:30:00', 'tag2,tag3', 'https://example.com/2'),
+                (3, NULL,         'No subject entry',  '2024-03-01 09:00:00', NULL, NULL)
         """)
     if with_status:
         conn.execute("""

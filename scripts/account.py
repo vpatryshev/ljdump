@@ -29,8 +29,10 @@ class Account:
       return True
 
   def login_data(self) -> dict:
+    # Field names must match Dreamwidth's web login form (/login). The form
+    # uses 'user' (NOT 'username', which is the XML-RPC field name).
     return {
-      'username': self.user,
+      'user': self.user,
       'password': self.password,
       'action:login': 'Log in',
       'remember_me': '1'
